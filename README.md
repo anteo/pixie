@@ -2,15 +2,15 @@
 
 **A browser-based graphics editor for ZX Spectrum screens.**
 
-[![English](https://img.shields.io/badge/language-English-0b6572)](README.md) [![Русский](https://img.shields.io/badge/язык-Русский-555)](README.ru.md) [![Open Pixie](https://img.shields.io/badge/open-Pixie-00a6b2)](https://anteo.github.io/pixie/)
+[![English](https://img.shields.io/badge/language-English-0000d7?labelColor=181a20&style=flat-square)](README.md) [![Русский](https://img.shields.io/badge/язык-Русский-d700d7?labelColor=181a20&style=flat-square)](README.ru.md) [![Open Pixie](https://img.shields.io/badge/open-Pixie-d70000?labelColor=181a20&style=flat-square)](https://anteo.github.io/pixie/)
 
 **[Open Pixie in your browser](https://anteo.github.io/pixie/)** · No installation or build step. You can also download the repository and open `index.html` locally.
 
 Pixie lets you draw at individual pixel resolution while seeing how the result will look on a real ZX Spectrum screen. It supports the standard 256×192 bitmap and its 8×8 color attributes, with a switchable ZX attribute preview. Smaller canvases are available for artwork that does not need to fill the screen.
 
-![Pixie editing a ZX Spectrum boot screen](docs/images/editor.png)
+![Pixie showing Tracker Covers artwork imported from SCR](docs/images/editor.png)
 
-*A DuoConf boot-screen sketch loaded as an example SCR. The artwork is an example; Pixie is a general-purpose editor.*
+*Tracker Covers artwork loaded from the supplied `image.scr` as an example.*
 
 ## What you can do
 

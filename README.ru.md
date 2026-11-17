@@ -2,15 +2,15 @@
 
 **Графический редактор экранов ZX Spectrum, работающий в браузере.**
 
-[![English](https://img.shields.io/badge/language-English-555)](README.md) [![Русский](https://img.shields.io/badge/язык-Русский-0b6572)](README.ru.md) [![Открыть Pixie](https://img.shields.io/badge/открыть-Pixie-00a6b2)](https://anteo.github.io/pixie/)
+[![English](https://img.shields.io/badge/language-English-0000d7?labelColor=181a20&style=flat-square)](README.md) [![Русский](https://img.shields.io/badge/язык-Русский-d700d7?labelColor=181a20&style=flat-square)](README.ru.md) [![Открыть Pixie](https://img.shields.io/badge/открыть-Pixie-d70000?labelColor=181a20&style=flat-square)](https://anteo.github.io/pixie/)
 
 **[Открыть Pixie в браузере](https://anteo.github.io/pixie/)** · Установка и сборка не нужны. Можно также скачать репозиторий и открыть `index.html` локально.
 
 Pixie позволяет рисовать отдельными пикселями и сразу видеть, как изображение будет выглядеть на настоящем экране ZX Spectrum. Поддерживаются стандартный растр 256×192, цветовые атрибуты 8×8 и переключаемый предпросмотр ограничений ZX. Для небольших рисунков можно создать документ меньшего размера.
 
-![Редактор Pixie с экраном загрузки ZX Spectrum](docs/images/editor.png)
+![Редактор Pixie с рисунком Tracker Covers, импортированным из SCR](docs/images/editor.png)
 
-*В качестве примера загружен эскиз стартового экрана DuoConf. Pixie подходит для любых экранов и рисунков ZX Spectrum.*
+*В качестве примера загружен предоставленный файл `image.scr` с рисунком Tracker Covers.*
 
 ## Возможности
 
