@@ -406,57 +406,31 @@
       list.replaceChildren();
       for (let index = layers.length - 1; index >= 0; index--) {
         const layer = layers[index];
-        const row = document.createElement('div');
-        row.dataset.index = String(index);
-        row.className = 'layer-row' + (index === activeLayer ? ' active' : '')
-          + (hasSolo && !layer.solo ? ' solo-muted' : '');
-        row.title = tr('Select or drag layer; double-click its name to rename');
-        row.onclick = () => {
-          if (layerSort.suppressClick) return;
-          if (activeLayer === index) return;
-          stopLineSession(); stopRectangleSession();
-          if (selection) remember();
-          activeLayer = index;
-          if (pendingMove) pendingMove.targetLayer = index;
-          for (const item of list.children) item.classList.toggle('active', Number(item.dataset.index) === index);
-          document.querySelector('#layer-up').disabled = activeLayer === layers.length - 1;
-          document.querySelector('#layer-down').disabled = activeLayer === 0;
-          document.querySelector('#layer-merge').disabled = !canMergeDown();
-          if (tracePreview) updateFloatingTrace(); else render();
-        };
-        const eye = document.createElement('button');
-        const state = layer.solo ? 'Solo' : layer.visible ? 'On' : 'Off';
-        const next = layer.solo ? 'On' : layer.visible ? 'Off' : 'Solo';
-        eye.type = 'button'; eye.className = 'layer-eye';
-        eye.title = tr('Layer state: {state}; click for {next} (V for active layer)',
-          { state: tr(state), next: tr(next) });
-        eye.setAttribute('aria-label', eye.title);
-        eye.setAttribute('aria-pressed', layer.solo ? 'mixed' : String(layer.visible));
-        eye.innerHTML = layer.solo ? '<span class="solo-mark" aria-hidden="true">S</span>'
-          : `<svg class="icon"><use href="#i-eye${layer.visible ? '' : '-off'}"/></svg>`;
-        eye.onclick = event => {
-          event.stopPropagation(); cycleLayerVisibility(layer);
-        };
-        const name = document.createElement('span');
-        name.className = 'layer-name'; name.textContent = layer.name;
-        name.ondblclick = async event => {
-          event.stopPropagation();
-          const next = await askName(tr('Layer name'), layer.name, tr('Rename'));
-          if (next !== null && next !== layer.name) {
-            remember(); layer.name = next; renderLayerList();
-          }
-        };
-        const coords = document.createElement('span');
-        coords.className = 'layer-coords';
-        coords.textContent = `${layer.x}:${layer.y}`;
-        coords.title = tr('Layer offset: x {x}, y {y}', { x: layer.x, y: layer.y });
-        const remove = document.createElement('button');
-        remove.type = 'button'; remove.className = 'icon-button';
-        remove.title = tr('Delete layer'); remove.setAttribute('aria-label', remove.title);
-        remove.disabled = layers.length === 1;
-        remove.innerHTML = '<svg class="icon"><use href="#i-trash"/></svg>';
-        remove.onclick = event => { event.stopPropagation(); deleteLayer(index); };
-        row.append(eye, name, coords, remove); list.appendChild(row);
+        const row = window.PIXIE_PANEL_ROWS.layer({
+          layer, index, active: index === activeLayer, muted: hasSolo && !layer.solo,
+          canDelete: layers.length > 1, tr,
+          select: () => {
+            if (layerSort.suppressClick || activeLayer === index) return;
+            stopLineSession(); stopRectangleSession();
+            if (selection) remember();
+            activeLayer = index;
+            if (pendingMove) pendingMove.targetLayer = index;
+            for (const item of list.children) item.classList.toggle('active', Number(item.dataset.index) === index);
+            document.querySelector('#layer-up').disabled = activeLayer === layers.length - 1;
+            document.querySelector('#layer-down').disabled = activeLayer === 0;
+            document.querySelector('#layer-merge').disabled = !canMergeDown();
+            if (tracePreview) updateFloatingTrace(); else render();
+          },
+          toggle: () => cycleLayerVisibility(layer),
+          rename: async () => {
+            const next = await askName(tr('Layer name'), layer.name, tr('Rename'));
+            if (next !== null && next !== layer.name) {
+              remember(); layer.name = next; renderLayerList();
+            }
+          },
+          remove: () => deleteLayer(index),
+        });
+        list.appendChild(row);
       }
       document.querySelector('#layer-up').disabled = activeLayer === layers.length - 1;
       document.querySelector('#layer-down').disabled = activeLayer === 0;
@@ -491,55 +465,34 @@
       for (let index = references.length - 1; index >= 0; index--) {
         const reference = references[index];
         if (tracePreview && reference !== tracePreview.reference) continue;
-        const row = document.createElement('div');
-        row.dataset.index = String(index);
-        row.className = 'reference-row' + (index === selectedReference ? ' active' : '');
-        row.title = tr('Select or drag reference; move or resize it on the canvas');
-        row.onclick = () => { if (referenceSort.suppressClick) return;
-          if (tracePreview) {
-            if (tracePreview.reference === reference) return;
-            cancelTrace(false);
-          }
-          selectedReference = index === selectedReference ? -1 : index;
-          renderReferenceList(); updateReferenceFrame(); };
-        const thumb = document.createElement('img');
-        thumb.src = reference.dataUrl; thumb.alt = ''; thumb.draggable = false;
-        const name = document.createElement('span');
-        name.className = 'reference-name'; name.textContent = reference.name; name.title = reference.name;
-        const eye = document.createElement('button');
-        eye.type = 'button'; eye.className = 'icon-button';
-        eye.title = tr(reference.visible ? 'Hide reference' : 'Show reference');
-        eye.setAttribute('aria-label', eye.title);
-        eye.innerHTML = `<svg class="icon"><use href="#i-eye${reference.visible ? '' : '-off'}"/></svg>`;
-        eye.onclick = event => { event.stopPropagation(); remember(); reference.visible = !reference.visible;
-          renderReferences(); renderReferenceList(); render(); };
-        const remove = document.createElement('button');
-        remove.type = 'button'; remove.className = 'icon-button';
-        remove.title = tr('Delete reference'); remove.setAttribute('aria-label', remove.title);
-        remove.innerHTML = '<svg class="icon"><use href="#i-trash"/></svg>';
-        remove.onclick = event => { event.stopPropagation(); remember(); references.splice(index, 1);
-          if (tracePreview?.reference === reference) cancelTrace(false);
-          if (selectedReference === index) selectedReference = -1;
-          else if (selectedReference > index) selectedReference--;
-          renderReferences(); renderReferenceList(); render(); };
-        const opacity = document.createElement('label');
-        opacity.className = 'reference-opacity';
-        const slider = document.createElement('input');
-        slider.type = 'range'; slider.min = '0'; slider.max = '100'; slider.value = String(Math.round(reference.opacity * 100));
-        slider.title = tr('Reference opacity');
-        slider.setAttribute('aria-label', `${reference.name}: ${tr('Reference opacity')}`);
-        const output = document.createElement('output');
-        output.textContent = `${slider.value}%`;
-        let editing = false;
-        slider.oninput = event => { event.stopPropagation();
-          if (!editing) { remember(); editing = true; }
-          reference.opacity = Number(slider.value) / 100; output.textContent = `${slider.value}%`;
-          renderReferences(); render(); };
-        slider.onchange = () => { editing = false; };
-        slider.onblur = () => { editing = false; };
-        slider.onclick = event => event.stopPropagation();
-        opacity.append(slider, output);
-        row.append(eye, thumb, name, remove, opacity);
+        const row = window.PIXIE_PANEL_ROWS.reference({
+          reference, index, active: index === selectedReference, tr,
+          select: () => {
+            if (referenceSort.suppressClick) return;
+            if (tracePreview) {
+              if (tracePreview.reference === reference) return;
+              cancelTrace(false);
+            }
+            selectedReference = index === selectedReference ? -1 : index;
+            renderReferenceList(); updateReferenceFrame();
+          },
+          toggle: () => {
+            remember(); reference.visible = !reference.visible;
+            renderReferences(); renderReferenceList(); render();
+          },
+          remove: () => {
+            remember(); references.splice(index, 1);
+            if (tracePreview?.reference === reference) cancelTrace(false);
+            if (selectedReference === index) selectedReference = -1;
+            else if (selectedReference > index) selectedReference--;
+            renderReferences(); renderReferenceList(); render();
+          },
+          opacityChange: (value, firstChange) => {
+            if (firstChange) remember();
+            reference.opacity = value;
+            renderReferences(); render();
+          },
+        });
         referenceList.appendChild(row);
       }
       traceButton.disabled = !tracePreview && !references[selectedReference];
