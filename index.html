@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pixie — The ZX Spectrum graphics editor</title>
+<link rel="stylesheet" href="pixie.css">
+<link rel="icon" type="image/png" sizes="16x16" href="pixie.png">
+<header>
+  <img class="app-icon" src="pixie.png" width="32" height="32" alt="">
+  <h1>Pixie</h1>
+  <span id="app-tagline">The ZX Spectrum graphics editor</span>
+</header>
+<svg xmlns="http://www.w3.org/2000/svg" width="0" height="0" aria-hidden="true" style="position:absolute">
+  <symbol id="i-open" viewBox="0 0 24 24">
+    <path d="M3 7V5a2 2 0 0 1 2-2h5l2 3h7a2 2 0 0 1 2 2v11H3z" />
+    <path d="M3 10h18l-2 9H3z" />
+  </symbol>
+  <symbol id="i-save" viewBox="0 0 24 24">
+    <path d="M4 3h13l4 4v14H3V3z" />
+    <path d="M7 3v6h10V3M7 21v-8h10v8" />
+  </symbol>
+  <symbol id="i-draw" viewBox="0 0 24 24">
+    <path d="m4 20 4-1 12-12-3-3L5 16zM14 7l3 3" />
+  </symbol>
+  <symbol id="i-line" viewBox="0 0 24 24"><path d="M4 20 20 4"/><circle cx="4" cy="20" r="1"/><circle cx="20" cy="4" r="1"/></symbol>
+  <symbol id="i-rect" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14"/></symbol>
+  <symbol id="i-fill-rect" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-select" viewBox="0 0 24 24">
+    <rect x="3" y="3" width="18" height="18" stroke-dasharray="3 3" />
+  </symbol>
+  <symbol id="i-attr" viewBox="0 0 24 24">
+    <rect x="3" y="3" width="18" height="18" />
+    <path d="M11 3v18M3 11h18" />
+    <path d="M15 15h3" />
+  </symbol>
+  <symbol id="i-text" viewBox="0 0 24 24">
+    <path d="M3 6V4h18v2M12 4v16M8 20h8" />
+  </symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24">
+    <rect x="8" y="8" width="12" height="12" rx="1" />
+    <path d="M16 8V4H4v12h4" />
+  </symbol>
+  <symbol id="i-cut" viewBox="0 0 24 24">
+    <circle cx="6" cy="17" r="2" />
+    <circle cx="18" cy="17" r="2" />
+    <path d="M7 15 17 4M17 15 7 4" />
+  </symbol>
+  <symbol id="i-paste" viewBox="0 0 24 24">
+    <rect x="5" y="5" width="14" height="16" rx="1" />
+    <path d="M9 5V3h6v2M9 11h6M9 15h6" />
+  </symbol>
+  <symbol id="i-undo" viewBox="0 0 24 24">
+    <path d="m9 5-5 5 5 5M4 10h11a5 5 0 0 1 0 10h-3" />
+  </symbol>
+  <symbol id="i-redo" viewBox="0 0 24 24">
+    <path d="m15 5 5 5-5 5M20 10H9a5 5 0 0 0 0 10h3" />
+  </symbol>
+  <symbol id="i-swap" viewBox="0 0 24 24">
+    <path d="M3 8h17m-4-4 4 4-4 4M21 16H4m4-4-4 4 4 4" />
+  </symbol>
+  <symbol id="i-bright" viewBox="0 0 24 24">
+    <circle cx="12" cy="12" r="4" />
+    <path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l2 2m10 10 2 2M19 5l-2 2M7 17l-2 2" />
+  </symbol>
+  <symbol id="i-grid" viewBox="0 0 24 24">
+    <rect x="3" y="3" width="18" height="18" />
+    <path d="M9 3v18m6-18v18M3 9h18M3 15h18" />
+  </symbol>
+  <symbol id="i-zx-preview" viewBox="0 0 24 24">
+    <rect x="3" y="3" width="18" height="18" />
+    <path d="M12 3v18M3 12h18M5 6h5M14 15h5" />
+  </symbol>
+  <symbol id="i-minus" viewBox="0 0 24 24">
+    <path d="M4 12h16" />
+  </symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24">
+    <path d="M4 12h16M12 4v16" />
+  </symbol>
+  <symbol id="i-move" viewBox="0 0 24 24"><path d="M12 2v20M2 12h20M12 2l-3 3m3-3 3 3m-3 17-3-3m3 3 3-3M2 12l3-3m-3 3 3 3m17-3-3-3m3 3-3 3"/></symbol>
+  <symbol id="i-layer" viewBox="0 0 24 24"><path d="m12 3 9 5-9 5-9-5 9-5Zm-9 9 9 5 9-5M3 16l9 5 9-5"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s4-6 10-6 10 6 10 6-4 6-10 6-10-6-10-6Z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-eye-off" viewBox="0 0 24 24"><path d="M3 3 21 21M9 6.5A11 11 0 0 1 12 6c6 0 10 6 10 6a17 17 0 0 1-3 3.3M6 8.4A16 16 0 0 0 2 12s4 6 10 6a11 11 0 0 0 4-.7"/></symbol>
+  <symbol id="i-up" viewBox="0 0 24 24"><path d="M12 20V4m-6 6 6-6 6 6"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="M12 4v16m-6-6 6 6 6-6"/></symbol>
+  <symbol id="i-merge-down" viewBox="0 0 24 24"><path d="M3 3h18v6H3zM3 16h18v5H3zM12 10v5m-3-3 3 3 3-3"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3m-9 0 1 14h10l1-14M10 11v6m4-6v6"/></symbol>
+  <symbol id="i-project" viewBox="0 0 24 24"><path d="M4 4h16v16H4zM4 10h16M10 10v10"/></symbol>
+  <symbol id="i-import" viewBox="0 0 24 24"><path d="M4 3h16v18H4zM12 5v10m-4-4 4 4 4-4M7 19h10"/></symbol>
+  <symbol id="i-export" viewBox="0 0 24 24"><path d="M4 3h16v18H4zM12 19V9m-4 4 4-4 4 4M7 5h10"/></symbol>
+  <symbol id="i-image" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16"/><circle cx="8" cy="9" r="1.5"/><path d="m4 18 6-6 4 4 3-3 4 4"/></symbol>
+  <symbol id="i-new" viewBox="0 0 24 24"><path d="M4 3h12l4 4v14H4zM16 3v5h4M12 11v7m-3-3.5h6"/></symbol>
+  <symbol id="i-fit" viewBox="0 0 24 24"><path d="M9 3H3v6m12-6h6v6m0 6v6h-6m-6 0H3v-6M3 9l6-6m6 0 6 6m0 6-6 6m-6 0-6-6"/></symbol>
+</svg>
+<div class="toolbar">
+  <button id="new" class="icon-button" title="New blank document (N)" aria-label="New blank document"><svg class="icon"><use href="#i-new"/></svg></button>
+  <span class="group-gap" aria-hidden="true"></span>
+  <button id="open-project" class="icon-button" title="Open Pixie project (⌘O)" aria-label="Open Pixie project"><svg class="icon">
+      <use href="#i-open" />
+    </svg></button><input id="project-file" type="file" accept=".pixie,text/plain">
+  <button id="save-project" class="icon-button" title="Save Pixie project (⌘S)" aria-label="Save Pixie project"><svg class="icon">
+      <use href="#i-save" />
+    </svg></button>
+  <span class="group-gap" aria-hidden="true"></span>
+  <button id="open" class="icon-button" title="Import SCR (⌘⇧O)" aria-label="Import SCR"><svg class="icon"><use href="#i-import"/></svg></button><input id="file" type="file" accept=".scr,application/octet-stream">
+  <button id="save" class="icon-button" title="Export SCR (⌘⇧S)" aria-label="Export SCR"><svg class="icon"><use href="#i-export"/></svg></button>
+  <button id="save-png" class="icon-button" title="Export PNG (Alt+P)" aria-label="Export PNG"><svg class="icon"><use href="#i-image"/></svg></button>
+  <span class="group-gap" aria-hidden="true"></span>
+  <button id="copy" class="icon-button" title="Copy selection (⌘C)" aria-label="Copy selection"><svg
+      class="icon">
+      <use href="#i-copy" />
+    </svg></button>
+  <button id="cut" class="icon-button" title="Cut selection (⌘X)" aria-label="Cut selection"><svg
+      class="icon">
+      <use href="#i-cut" />
+    </svg></button>
+  <button id="paste" class="icon-button" title="Paste (⌘V)" aria-label="Paste"><svg class="icon">
+      <use href="#i-paste" />
+    </svg></button>
+  <button id="undo" class="icon-button" title="Undo (⌘Z)" aria-label="Undo"><svg class="icon">
+      <use href="#i-undo" />
+    </svg></button>
+  <button id="redo" class="icon-button" title="Redo (⌘⇧Z)" aria-label="Redo"><svg class="icon">
+      <use href="#i-redo" />
+    </svg></button>
+  <span class="group-gap" aria-hidden="true"></span>
+  <div id="stroke-presets" class="stroke-presets" role="group" aria-label="Brush size"></div>
+  <span class="group-gap" aria-hidden="true"></span>
+  <div class="palette">
+    <div class="palette-row"><span class="palette-label">INK</span>
+      <div id="ink-swatches" class="swatches" role="group" aria-label="INK color"></div>
+    </div>
+    <div class="palette-row"><span class="palette-label">PAPER</span>
+      <div id="paper-swatches" class="swatches" role="group" aria-label="PAPER color"></div>
+    </div>
+  </div>
+  <span class="group-gap palette-gap" aria-hidden="true"></span>
+  <button id="swap" class="icon-button" title="Swap INK and PAPER (I)" aria-label="Swap INK and PAPER"><svg
+      class="icon">
+      <use href="#i-swap" />
+    </svg></button>
+  <button id="bright" class="icon-button active" title="BRIGHT (H)" aria-label="BRIGHT" aria-pressed="true"><svg
+      class="icon">
+      <use href="#i-bright" />
+    </svg></button>
+  <button id="grid" class="icon-button" title="Grid: pixels from 8× (G)" aria-label="Grid" aria-pressed="false"><svg
+      class="icon">
+      <use href="#i-grid" />
+    </svg></button>
+  <button id="zx-preview" class="icon-button active" title="Preview ZX attributes (Z)" aria-label="Preview ZX attributes" aria-pressed="true"><svg class="icon"><use href="#i-zx-preview"/></svg></button>
+</div>
+<div class="workspace">
+  <aside class="tool-rail" aria-label="Tools">
+    <button data-tool="draw" class="icon-button active" title="Draw or erase (B); right button erases" aria-label="Draw"><svg class="icon"><use href="#i-draw"/></svg></button>
+    <button data-tool="line" class="icon-button" title="Polyline (D): click for points, drag for one segment; Shift snaps to axes and 45°; Escape ends" aria-label="Polyline"><svg class="icon"><use href="#i-line"/></svg></button>
+    <button data-tool="rect" class="icon-button" title="Rectangle (R): two clicks or drag; right button erases" aria-label="Rectangle"><svg class="icon"><use href="#i-rect"/></svg></button>
+    <button data-tool="fill-rect" class="icon-button" title="Filled rectangle (F): two clicks or drag; right button erases" aria-label="Filled rectangle"><svg class="icon"><use href="#i-fill-rect"/></svg></button>
+    <span class="rail-gap" aria-hidden="true"></span>
+    <button data-tool="select" class="icon-button" title="Select area (S); Shift snaps to 8×8 cells" aria-label="Select"><svg class="icon"><use href="#i-select"/></svg></button>
+    <button data-tool="move-layer" class="icon-button" title="Move layer (M; arrows move 1 pixel, Shift+arrows move 8)" aria-label="Move layer"><svg class="icon"><use href="#i-move"/></svg></button>
+    <button id="attr-mode" class="icon-button" title="Draw 8×8 cell attributes (A)" aria-label="Draw cell attributes" aria-pressed="false"><svg class="icon"><use href="#i-attr"/></svg></button>
+    <button data-tool="text" class="icon-button" title="Text: click the canvas and type; Shift snaps to a cell (T)" aria-label="Text"><svg class="icon"><use href="#i-text"/></svg></button>
+  </aside>
+  <div class="canvas-area"><div id="viewport">
+    <div id="stage"><canvas id="transparency" width="512" height="384" aria-hidden="true"></canvas><canvas id="screen" width="256" height="192"></canvas><canvas id="text-preview" width="256" height="192" aria-hidden="true"></canvas><input id="text-entry" type="text" aria-label="Text on canvas" autocomplete="off"><svg id="pixel-overlay" viewBox="0 0 256 192"
+      preserveAspectRatio="none" aria-hidden="true">
+      <g id="pixel-grid"></g>
+    </svg><svg id="overlay" viewBox="0 0 256 192" preserveAspectRatio="none" aria-hidden="true">
+      <g id="cell-grid"></g>
+      <g id="selection-outline"></g>
+    </svg></div>
+  </div><div class="zoom-presets" role="group" aria-label="Quick zoom">
+    <button id="zoom-1" title="Zoom 1× (Alt+1)">1×</button>
+    <button id="zoom-2" title="Zoom 2× (Alt+2)">2×</button>
+    <button id="zoom-fit" title="Fit screen (Alt+0)" aria-label="Fit screen"><svg class="icon"><use href="#i-fit"/></svg></button>
+  </div></div>
+  <aside id="layers-panel" aria-label="Layers">
+    <div class="layers-heading"><strong>Layers</strong>
+      <button id="layer-add" class="icon-button" title="Add layer (L)" aria-label="Add layer"><svg class="icon"><use href="#i-plus"/></svg></button>
+      <button id="layer-up" class="icon-button" title="Raise layer (])" aria-label="Raise layer"><svg class="icon"><use href="#i-up"/></svg></button>
+      <button id="layer-down" class="icon-button" title="Lower layer ([)" aria-label="Lower layer"><svg class="icon"><use href="#i-down"/></svg></button>
+      <button id="layer-merge" class="icon-button" title="Merge with layer below (Shift+M)" aria-label="Merge with layer below"><svg class="icon"><use href="#i-merge-down"/></svg></button>
+      <button id="layer-delete" class="icon-button" title="Delete layer (⇧L)" aria-label="Delete layer"><svg class="icon"><use href="#i-trash"/></svg></button>
+    </div>
+    <div id="layer-list"></div>
+    <div id="background-panel"><strong>Background</strong><div id="background-swatches" role="group" aria-label="Background color"></div></div>
+  </aside>
+</div>
+<div id="shape-measure" aria-hidden="true"></div>
+<div id="status-bar">
+  <div id="status">New blank project. Add a layer or import SCR.</div>
+  <div id="document-info"><span id="document-size">256×192</span><span id="stroke-current" aria-label="Brush size" title="Brush size: 1×1 pixels"><span id="stroke-indicator-slot" class="stroke-indicator-slot"><span id="stroke-indicator" class="stroke-square" style="--square-size: 4px" aria-hidden="true"></span></span><span id="stroke-dimensions">1×1 px</span></span></div>
+  <div id="cursor-info" aria-label="SCR attributes under cursor" title="INK and PAPER after SCR encoding">
+    <span id="cursor-coords">x: — · y: —</span>
+    <span>INK</span><span id="cursor-ink" class="cursor-swatch"></span>
+    <span>PAPER</span><span id="cursor-paper" class="cursor-swatch"></span>
+  </div>
+</div>
+<dialog id="new-dialog" class="editor-dialog" aria-labelledby="new-dialog-title">
+  <h2 id="new-dialog-title">New document</h2>
+  <fieldset class="size-options"><legend>Size</legend>
+    <label><input type="radio" name="new-size" value="screen" checked> <span id="new-size-screen-label">Full screen 256×192</span></label>
+    <label><input type="radio" name="new-size" value="custom"> <span id="new-size-custom-label">Custom size</span>
+      <input id="new-width" type="number" min="1" max="256" value="64" aria-label="Width in pixels"> ×
+      <input id="new-height" type="number" min="1" max="192" value="64" aria-label="Height in pixels"> px
+    </label>
+  </fieldset>
+  <div id="new-size-error" class="dialog-error" aria-live="polite"></div>
+  <p>Save the current project before creating a new one?</p>
+  <div class="dialog-actions">
+    <button id="new-cancel" type="button">Cancel</button>
+    <button id="new-discard" type="button">Don't save</button>
+    <button id="new-save" type="button">Save</button>
+  </div>
+</dialog>
+<dialog id="name-dialog" class="editor-dialog" aria-labelledby="name-dialog-title">
+  <h2 id="name-dialog-title">File name</h2>
+  <input id="name-input" type="text" autocomplete="off" aria-label="Name">
+  <div id="name-error" class="dialog-error" aria-live="polite"></div>
+  <div class="dialog-actions">
+    <button id="name-cancel" type="button">Cancel</button>
+    <button id="name-accept" type="button">Save</button>
+  </div>
+</dialog>
+<script src="pixie.ru.js" defer></script>
+<script src="pixie.js" defer></script>
+
+</html>
