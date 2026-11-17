@@ -94,6 +94,7 @@
   <symbol id="i-import" viewBox="0 0 24 24"><path d="M4 3h16v18H4zM12 5v10m-4-4 4 4 4-4M7 19h10"/></symbol>
   <symbol id="i-export" viewBox="0 0 24 24"><path d="M4 3h16v18H4zM12 19V9m-4 4 4-4 4 4M7 5h10"/></symbol>
   <symbol id="i-image" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16"/><circle cx="8" cy="9" r="1.5"/><path d="m4 18 6-6 4 4 3-3 4 4"/></symbol>
+  <symbol id="i-trace" viewBox="0 0 24 24"><path d="M3 4h9v9H3zM15 4h6v6h-6zM15 14h6v6h-6zM4 17h7m-3-3 3 3-3 3"/></symbol>
   <symbol id="i-new" viewBox="0 0 24 24"><path d="M4 3h12l4 4v14H4zM16 3v5h4M12 11v7m-3-3.5h6"/></symbol>
   <symbol id="i-fit" viewBox="0 0 24 24"><path d="M9 3H3v6m12-6h6v6m0 6v6h-6m-6 0H3v-6M3 9l6-6m6 0 6 6m0 6-6 6m-6 0-6-6"/></symbol>
 </svg>
@@ -195,10 +196,27 @@
     </div>
     <div id="layer-list"></div>
     <div id="references-panel"><div class="references-heading"><strong>References</strong>
+      <button id="reference-trace" class="icon-button" title="Reference tracing (K)" aria-label="Reference tracing" disabled><svg class="icon"><use href="#i-trace"/></svg></button>
       <button id="reference-add" class="icon-button" title="Add reference image" aria-label="Add reference image"><svg class="icon"><use href="#i-plus"/></svg></button>
       <input id="reference-file" type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple>
-    </div><div id="reference-list"></div></div>
+    </div><div id="reference-list"></div>
+    </div>
     <div id="background-panel"><strong>Background</strong><div id="background-swatches" role="group" aria-label="Background color"></div></div>
+    <div id="trace-settings" hidden><strong class="trace-title" data-i18n="Tracing">Tracing</strong>
+        <div class="trace-actions"><button id="trace-apply" type="button" data-i18n="Apply">Apply</button><button id="trace-cancel" type="button" data-i18n="Cancel">Cancel</button></div>
+        <label class="trace-control"><span><span data-i18n="Brightness">Brightness</span><output>0</output></span><input data-trace="brightness" type="range" min="-100" max="100" value="0"></label>
+        <label class="trace-control"><span><span data-i18n="Contrast">Contrast</span><output>0</output></span><input data-trace="contrast" type="range" min="-100" max="100" value="0"></label>
+        <label class="trace-control"><span><span data-i18n="Saturation">Saturation</span><output>100%</output></span><input data-trace="saturation" type="range" min="0" max="200" value="100"></label>
+        <label class="trace-control"><span><span data-i18n="Levels">Levels</span><output>8</output></span><input data-trace="levels" type="range" min="2" max="16" value="8"></label>
+        <label class="trace-control"><span><span data-i18n="Simplify">Simplify</span><output>0%</output></span><input data-trace="simplify" type="range" min="0" max="100" value="0"></label>
+        <label class="trace-control"><span><span data-i18n="Noise">Noise</span><output>0%</output></span><input data-trace="noise" type="range" min="0" max="100" value="0"></label>
+        <label class="trace-control"><span data-i18n="Dithering">Dithering</span><select data-trace="ditherMode"><option value="fs" data-i18n="Floyd–Steinberg (linear RGB)">Floyd–Steinberg (linear RGB)</option><option value="sierra">Sierra</option><option value="atkinson">Atkinson</option><option value="ordered4">Bayer 4×4</option><option value="ordered8">Bayer 8×8</option><option value="checker" data-i18n="Checker dither">Checker dither</option><option value="none" data-i18n="None">None</option></select></label>
+        <label class="trace-control"><span><span data-i18n="Dither strength">Dither strength</span><output>100%</output></span><input data-trace="ditherStrength" type="range" min="0" max="100" value="100"></label>
+        <label class="trace-control"><span><span data-i18n="Checker strength">Checker strength</span><output>35%</output></span><input data-trace="checkerStrength" type="range" min="0" max="100" value="35"></label>
+        <label class="trace-control"><span><span data-i18n="Dither density">Dither density</span><output>100%</output></span><input data-trace="ditherDensity" type="range" min="0" max="100" value="100"></label>
+        <label class="trace-toggle"><input data-trace="optimizeClashing" type="checkbox"> <span data-i18n="Optimize clashing">Optimize clashing</span></label>
+        <label class="trace-control"><span><span data-i18n="Clash strength">Clash strength</span><output>45%</output></span><input data-trace="clashStrength" type="range" min="0" max="100" value="45"></label>
+    </div>
   </aside>
 </div>
 <div id="shape-measure" aria-hidden="true"></div>
@@ -238,6 +256,7 @@
   </div>
 </dialog>
 <script src="pixie.ru.js" defer></script>
+<script src="pixie.trace.js" defer></script>
 <script src="pixie.js" defer></script>
 
 </html>

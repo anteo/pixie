@@ -168,14 +168,14 @@
     padding: 30px;
     overscroll-behavior: contain;
   }
-  #layers-panel { min-width: 0; border-left: 1px solid #444; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+  #layers-panel { min-width: 0; min-height: 0; border-left: 1px solid #444; padding: 10px; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; }
   .layers-heading { display: flex; align-items: center; justify-content: space-between; gap: 3px; }
   .layers-heading strong { margin-right: auto; }
   .layers-heading .icon-button { width: 27px; height: 27px; padding: 4px; }
   .layers-heading .icon { width: 17px; height: 17px; }
-  #layer-list { display: flex; flex: 0 1 auto; flex-direction: column; gap: 4px; min-height: 0; overflow: auto; }
-  #background-panel { display: grid; flex: none; gap: 8px; margin-top: 8px; }
-  .layers-heading strong, #background-panel strong, .references-heading strong { font-size: 17px; }
+  #layer-list { display: flex; flex: none; flex-direction: column; gap: 4px; }
+  #background-panel { display: grid; flex: none; gap: 8px; margin-top: 4px; }
+  .layers-heading strong, #background-panel strong, .references-heading strong, .trace-title { font-size: 17px; }
   #background-swatches { display: grid; grid-template-columns: repeat(9, minmax(0, 1fr)); gap: 3px; }
   #background-swatches .swatch { width: 100%; min-width: 0; height: 20px; }
   .layer-row { display: flex; align-items: center; gap: 5px; min-width: 0; padding: 5px; border: 1px solid #4d515b; border-radius: 5px; cursor: grab; user-select: none; touch-action: none; }
@@ -193,12 +193,13 @@
   .layer-row .icon-button .icon { width: 16px; height: 16px; }
   .layer-eye .solo-mark { font: 700 15px/1 ui-monospace, monospace; }
   .layer-coords { flex: none; color: #aeb6c4; font: 11px ui-monospace, monospace; white-space: nowrap; }
-  #references-panel { display: flex; flex-direction: column; gap: 8px; min-height: 0; margin-top: 8px; }
-  .references-heading { display: flex; align-items: center; justify-content: space-between; }
+  #references-panel { display: flex; flex: none; flex-direction: column; gap: 8px; margin-top: 4px; }
+  .references-heading { display: flex; align-items: center; gap: 4px; }
+  .references-heading strong { margin-right: auto; }
   .references-heading .icon-button { width: 27px; height: 27px; padding: 4px; }
   .references-heading .icon { width: 17px; height: 17px; }
   #reference-file { display: none; }
-  #reference-list { display: flex; flex-direction: column; gap: 5px; min-height: 0; overflow: auto; }
+  #reference-list { display: flex; flex-direction: column; gap: 5px; }
   .reference-row { display: grid; grid-template-columns: 26px 32px minmax(0, 1fr) 26px; align-items: center; gap: 5px; padding: 5px; border: 1px solid #4d515b; border-radius: 5px; cursor: grab; user-select: none; touch-action: none; }
   .reference-row.active { border-color: #ff40ff; background: #3d263e; }
   .reference-row.dragging { opacity: .45; }
@@ -211,6 +212,20 @@
   .reference-opacity { grid-column: 1 / -1; display: flex; align-items: center; gap: 6px; }
   .reference-opacity input { width: 100%; min-width: 0; accent-color: #ff40ff; }
   .reference-opacity output { width: 4ch; text-align: right; font: 11px ui-monospace, monospace; }
+  #trace-settings { flex: none; margin-top: 4px; }
+  #trace-settings[hidden] { display: none; }
+  .trace-title { display: block; }
+  .trace-actions { display: flex; gap: 6px; margin-top: 8px; }
+  .trace-actions button { flex: 1; }
+  #trace-apply { background: #0b6572; border-color: #55dce5; }
+  .trace-control { display: block; margin-top: 9px; }
+  .trace-control[hidden] { display: none; }
+  .trace-control > span { display: flex; justify-content: space-between; gap: 5px; color: #c5c8d0; font-size: 12px; }
+  .trace-control output { min-width: 4ch; text-align: right; font: 11px ui-monospace, monospace; }
+  .trace-control input { display: block; width: 100%; margin: 4px 0 0; accent-color: #a6a6ff; }
+  .trace-control select { display: block; width: 100%; margin-top: 4px; padding: 3px 4px; color: #eee; background: #30343e; border: 1px solid #5b606b; border-radius: 4px; }
+  .trace-toggle { display: flex; align-items: center; gap: 5px; margin-top: 10px; color: #c5c8d0; font-size: 12px; }
+  .trace-toggle input { margin: 0; accent-color: #a6a6ff; }
   @media (max-width: 800px) { :root { --tool-rail-width: 48px; } .workspace { grid-template-columns: var(--tool-rail-width) minmax(0, 1fr) 188px; } #layers-panel { padding: 6px; } .layers-heading .icon-button { width: 23px; } }
 
   #stage {

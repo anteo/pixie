@@ -28,6 +28,7 @@
         '#name-dialog-title': 'File name', '#name-cancel': 'Cancel', '#name-accept': 'Save',
       };
       for (const [selector, value] of Object.entries(text)) document.querySelector(selector).textContent = tr(value);
+      for (const element of document.querySelectorAll('[data-i18n]')) element.textContent = tr(element.dataset.i18n);
       const labels = {
         '#new': ['New blank document (N)', 'New blank document'],
         '#open-project': ['Open Pixie project (⌘O)', 'Open Pixie project'],
@@ -69,6 +70,9 @@
         '#background-swatches': [null, 'Background color'],
         '#references-panel': [null, 'Reference images'],
         '#reference-add': ['Add reference image', 'Add reference image'],
+        '#reference-trace': ['Reference tracing (K)', 'Reference tracing'],
+        '#trace-apply': ['Apply tracing (Enter)', 'Apply'],
+        '#trace-cancel': ['Cancel tracing (Escape)', 'Cancel'],
         '#reference-frame': [null, 'Selected reference image'],
         '#stroke-current': ['Brush size: 1×1 pixels', 'Brush size'],
         '#cursor-info': ['INK and PAPER after SCR encoding', 'SCR attributes under cursor'],
@@ -93,11 +97,14 @@
     let layers = [emptyLayer(tr('Layer {number}', { number: 1 }))];
     let activeLayer = 0, bitmap = layers[0].bitmap, attrs = layers[0].attrs, mask = layers[0].mask;
     let references = [], selectedReference = -1, referenceDrag = null;
+    let traceSettings = { ...window.PIXIE_TRACE.defaults }, tracePreview = null, traceDrag = null;
     let projectFileName = 'screen.pixie', exportFileName = 'screen.scr';
     const screen = document.querySelector('#screen');
     const referenceLayer = document.querySelector('#reference-layer');
     const referenceFrame = document.querySelector('#reference-frame');
     const referenceList = document.querySelector('#reference-list');
+    const traceButton = document.querySelector('#reference-trace');
+    const traceSettingsPanel = document.querySelector('#trace-settings');
     const transparencyCanvas = document.querySelector('#transparency');
     const transparencyContext = transparencyCanvas.getContext('2d');
     const pixelGrid = document.querySelector('#pixel-grid'), cellGrid = document.querySelector('#cell-grid');
@@ -148,7 +155,8 @@
       button.onclick = () => {
         const next = i === 8 ? -1 : brightEnabled && i ? i + 8 : i;
         if (next === backgroundCode) return;
-        remember(); backgroundCode = next; updateBackgroundSwatches(); render();
+        remember(); backgroundCode = next; updateBackgroundSwatches();
+        if (tracePreview) updateFloatingTrace(); else render();
       };
       backgroundSwatches.appendChild(button);
     }
@@ -174,7 +182,7 @@
       if (kind === 'ink') { inkTransparent = index === 8; if (index < 8) ink = index; }
       else { paperTransparent = index === 8; if (index < 8) paper = index; }
       updateSwatches();
-      if (selection) recolorSelection(kind, index);
+      if (selection && !tracePreview) recolorSelection(kind, index);
       previewText();
       refreshPolyline(); refreshRectangle();
     }
@@ -320,14 +328,17 @@
       data: { ...move.data, bits: move.data.bits.slice(), colors: move.data.colors.slice(), opacity: move.data.opacity.slice() },
     } : null;
     function snapshot() {
+      const tracing = tracePreview?.move === pendingMove;
       return { activeLayer, projectFileName, exportFileName, backgroundCode, width: W, height: H,
         references: references.map(reference => ({ ...reference })), selectedReference,
-        selection: selection ? { ...selection } : null, pendingMove: copyMove(pendingMove), layers: layers.map(layer => ({
+        selection: tracing ? (tracePreview.previousSelection ? { ...tracePreview.previousSelection } : null)
+          : selection ? { ...selection } : null,
+        pendingMove: tracing ? null : copyMove(pendingMove), layers: layers.map(layer => ({
         name: layer.name, visible: layer.visible, solo: !!layer.solo, x: layer.x, y: layer.y,
         bitmap: layer.bitmap.slice(), attrs: layer.attrs.slice(), mask: layer.mask.slice(),
       })) };
     }
-    function remember(previousSelection = selection) {
+    function remember(previousSelection = tracePreview ? tracePreview.previousSelection : selection) {
       const saved = snapshot();
       saved.selection = previousSelection ? { ...previousSelection } : null;
       undo.push(saved);
@@ -338,6 +349,8 @@
       if (!from.length) return;
       stopLineSession(); stopRectangleSession();
       to.push(snapshot());
+      clearTimeout(traceUpdateTimer);
+      tracePreview = null; traceDrag = null; traceSettingsPanel.hidden = true;
       const saved = from.pop(); layers = saved.layers; activeLayer = saved.activeLayer;
       projectFileName = saved.projectFileName; exportFileName = saved.exportFileName;
       backgroundCode = saved.backgroundCode;
@@ -680,7 +693,7 @@
           document.querySelector('#layer-up').disabled = activeLayer === layers.length - 1;
           document.querySelector('#layer-down').disabled = activeLayer === 0;
           document.querySelector('#layer-merge').disabled = !canMergeDown();
-          render();
+          if (tracePreview) updateFloatingTrace(); else render();
         };
         const eye = document.createElement('button');
         const state = layer.solo ? 'Solo' : layer.visible ? 'On' : 'Off';
@@ -728,7 +741,7 @@
     }
     function updateReferenceFrame() {
       const reference = references[selectedReference];
-      referenceFrame.hidden = !reference || !reference.visible;
+      referenceFrame.hidden = !reference || !reference.visible || !!tracePreview || !!pendingMove;
       if (referenceFrame.hidden) return;
       referenceFrame.style.left = `${reference.x * zoom}px`;
       referenceFrame.style.top = `${reference.y * zoom}px`;
@@ -738,6 +751,7 @@
     function renderReferences() {
       const visibleImages = [];
       for (const reference of references) {
+        if (tracePreview && reference !== tracePreview.reference) continue;
         if (!reference.visible || !reference.image || reference.opacity <= 0) continue;
         const image = reference.image;
         const width = reference.width * zoom, height = reference.height * zoom;
@@ -772,11 +786,16 @@
       referenceList.replaceChildren();
       for (let index = references.length - 1; index >= 0; index--) {
         const reference = references[index];
+        if (tracePreview && reference !== tracePreview.reference) continue;
         const row = document.createElement('div');
         row.dataset.index = String(index);
         row.className = 'reference-row' + (index === selectedReference ? ' active' : '');
         row.title = tr('Select or drag reference; move or resize it on the canvas');
         row.onclick = () => { if (suppressReferenceClick) return;
+          if (tracePreview) {
+            if (tracePreview.reference === reference) return;
+            cancelTrace(false);
+          }
           selectedReference = index === selectedReference ? -1 : index;
           renderReferenceList(); updateReferenceFrame(); };
         const thumb = document.createElement('img');
@@ -795,6 +814,7 @@
         remove.title = tr('Delete reference'); remove.setAttribute('aria-label', remove.title);
         remove.innerHTML = '<svg class="icon"><use href="#i-trash"/></svg>';
         remove.onclick = event => { event.stopPropagation(); remember(); references.splice(index, 1);
+          if (tracePreview?.reference === reference) cancelTrace(false);
           if (selectedReference === index) selectedReference = -1;
           else if (selectedReference > index) selectedReference--;
           renderReferences(); renderReferenceList(); render(); };
@@ -818,6 +838,9 @@
         row.append(eye, thumb, name, remove, opacity);
         referenceList.appendChild(row);
       }
+      traceButton.disabled = !tracePreview && !references[selectedReference];
+      traceButton.classList.toggle('active', !!tracePreview);
+      traceButton.setAttribute('aria-pressed', String(!!tracePreview));
       updateReferenceFrame();
     }
     referenceList.addEventListener('pointerdown', event => {
@@ -905,6 +928,179 @@
       event.target.value = '';
       if (added) { renderReferences(); renderReferenceList(); render(); }
     };
+    const traceControls = [...document.querySelectorAll('[data-trace]')];
+    const traceControlBefore = new Map();
+    let traceUpdateTimer = null;
+    function syncTraceControls() {
+      for (const control of traceControls) {
+        const key = control.dataset.trace;
+        if (control.type === 'checkbox') control.checked = traceSettings[key];
+        else control.value = String(traceSettings[key]);
+        const output = control.closest('label').querySelector('output');
+        if (output) output.textContent = `${traceSettings[key]}${['saturation', 'simplify', 'noise', 'ditherStrength',
+          'checkerStrength', 'ditherDensity', 'clashStrength'].includes(key) ? '%' : ''}`;
+        const unavailable = key === 'ditherStrength' && ['none', 'checker'].includes(traceSettings.ditherMode)
+          || ['checkerStrength', 'ditherDensity'].includes(key) && traceSettings.ditherMode !== 'checker'
+          || key === 'clashStrength' && !traceSettings.optimizeClashing;
+        control.closest('label').hidden = unavailable;
+      }
+    }
+    function traceReference() {
+      return references[selectedReference] || null;
+    }
+    function sampleReference(reference) {
+      const canvas = document.createElement('canvas');
+      canvas.width = W; canvas.height = H;
+      const context = canvas.getContext('2d', { willReadFrequently: true });
+      context.imageSmoothingEnabled = true;
+      context.imageSmoothingQuality = 'high';
+      context.drawImage(reference.image, reference.x, reference.y, reference.width, reference.height);
+      return context.getImageData(0, 0, W, H);
+    }
+    function referenceArea(reference) {
+      const left = Math.max(0, Math.floor(reference.x));
+      const top = Math.max(0, Math.floor(reference.y));
+      const right = Math.min(W, Math.ceil(reference.x + reference.width));
+      const bottom = Math.min(H, Math.ceil(reference.y + reference.height));
+      return right > left && bottom > top ? { x: left, y: top, w: right - left, h: bottom - top } : null;
+    }
+    function changeTraceArea(area, target = area) {
+      if (!tracePreview || !area || area.w < 1 || area.h < 1) return;
+      const color = paletteRgb[backgroundCode < 0 ? 0 : backgroundCode];
+      const data = window.PIXIE_TRACE.convert(tracePreview.source, area,
+        layers[activeLayer], traceSettings, paletteRgb, color);
+      pendingMove = { source: null, data, target: { ...target }, sourceLayer: null, targetLayer: activeLayer };
+      tracePreview.area = { ...area };
+      tracePreview.move = pendingMove;
+      selection = { ...target };
+      render();
+    }
+    function traceState() {
+      return { area: { ...tracePreview.area }, target: { ...pendingMove.target }, settings: { ...traceSettings } };
+    }
+    function sameTraceState(a, b) {
+      return sameSelection(a.area, b.area) && sameSelection(a.target, b.target)
+        && Object.keys(a.settings).every(key => a.settings[key] === b.settings[key]);
+    }
+    function recordTraceChange(before) {
+      if (!tracePreview || !before || sameTraceState(before, traceState())) return;
+      tracePreview.history.push(before);
+      if (tracePreview.history.length > 50) tracePreview.history.shift();
+      tracePreview.future.length = 0;
+    }
+    function restoreTraceState(state) {
+      clearTimeout(traceUpdateTimer);
+      traceSettings = window.PIXIE_TRACE.normalize(state.settings);
+      syncTraceControls();
+      changeTraceArea(state.area, state.target);
+      updateCanvasCursor();
+    }
+    function flushTraceControlHistory() {
+      for (const before of traceControlBefore.values()) recordTraceChange(before);
+      traceControlBefore.clear();
+    }
+    function undoTrace() {
+      if (!tracePreview) return;
+      flushTraceControlHistory();
+      if (traceDrag) {
+        const before = traceDrag.before;
+        traceDrag = null; restoreTraceState(before);
+        note(tr('Tracing change undone.')); return;
+      }
+      const previous = tracePreview.history.pop();
+      if (!previous) return;
+      tracePreview.future.push(traceState());
+      restoreTraceState(previous);
+      note(tr('Tracing change undone.'));
+    }
+    function redoTrace() {
+      if (!tracePreview || traceDrag) return;
+      flushTraceControlHistory();
+      const next = tracePreview.future.pop();
+      if (!next) return;
+      tracePreview.history.push(traceState());
+      restoreTraceState(next);
+      note(tr('Tracing change redone.'));
+    }
+    function cancelTrace(announce = true) {
+      if (!tracePreview) return;
+      clearTimeout(traceUpdateTimer);
+      const previousSelection = tracePreview.previousSelection;
+      tracePreview = null; traceDrag = null;
+      traceControlBefore.clear();
+      pendingMove = null; selection = previousSelection ? { ...previousSelection } : null;
+      traceSettingsPanel.hidden = true;
+      renderReferences(); renderReferenceList(); render();
+      if (announce) note(tr('Tracing cancelled.'));
+    }
+    function applyTrace() {
+      if (!tracePreview) return;
+      clearTimeout(traceUpdateTimer);
+      if (traceDrag?.nextArea) changeTraceArea(traceDrag.nextArea, traceDrag.nextTarget);
+      else updateFloatingTrace();
+      remember();
+      tracePreview = null; traceDrag = null;
+      traceControlBefore.clear();
+      finishPendingMove(); selection = null;
+      traceSettingsPanel.hidden = true;
+      renderReferences(); renderReferenceList(); render();
+      note(tr('Tracing applied.'));
+    }
+    function activateTrace() {
+      if (tracePreview) { cancelTrace(); return; }
+      const reference = traceReference();
+      if (!reference) { note(tr('Select a reference to trace.')); return; }
+      commitText();
+      let previousSelection = selection ? { ...selection } : null;
+      if (pendingMove) {
+        remember(); finishPendingMove(); selection = null; previousSelection = null;
+      }
+      const area = previousSelection || referenceArea(reference);
+      if (!area) { note(tr('No reference pixels in the selected area.')); return; }
+      setTool('select');
+      tracePreview = { reference, source: sampleReference(reference), area: null,
+        previousSelection, move: null, history: [], future: [] };
+      traceControlBefore.clear();
+      traceSettingsPanel.hidden = false;
+      changeTraceArea(area);
+      renderReferences(); renderReferenceList();
+      traceSettingsPanel.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      note(tr('Tracing preview ready. Resize or redraw the area; Enter applies, Escape cancels.'));
+    }
+    traceButton.onclick = activateTrace;
+    document.querySelector('#trace-apply').onclick = applyTrace;
+    document.querySelector('#trace-cancel').onclick = () => cancelTrace();
+    function updateFloatingTrace() {
+      if (tracePreview?.move !== pendingMove) return;
+      changeTraceArea(tracePreview.area, pendingMove.target);
+    }
+    for (const control of traceControls) {
+      const beginEdit = () => {
+        if (tracePreview && !traceControlBefore.has(control)) traceControlBefore.set(control, traceState());
+      };
+      const finishEdit = () => {
+        const before = traceControlBefore.get(control);
+        if (before) recordTraceChange(before);
+        traceControlBefore.delete(control);
+      };
+      control.addEventListener('pointerdown', beginEdit);
+      control.addEventListener('keydown', beginEdit);
+      control.addEventListener('input', () => {
+        beginEdit();
+        const key = control.dataset.trace;
+        traceSettings[key] = control.type === 'checkbox' ? control.checked
+          : control.tagName === 'SELECT' ? control.value : Number(control.value);
+        traceSettings = window.PIXIE_TRACE.normalize(traceSettings);
+        syncTraceControls();
+        clearTimeout(traceUpdateTimer);
+        traceUpdateTimer = setTimeout(updateFloatingTrace, 60);
+      });
+      control.addEventListener('change', () => {
+        clearTimeout(traceUpdateTimer); updateFloatingTrace(); finishEdit();
+      });
+      control.addEventListener('blur', finishEdit);
+    }
+    syncTraceControls();
     referenceFrame.addEventListener('pointerdown', event => {
       if (event.button !== 0 || selectedReference < 0) return;
       const handle = event.target.dataset.handle || 'move';
@@ -954,7 +1150,7 @@
       layers.push(emptyLayer(tr('Layer {number}', { number })));
       activeLayer = layers.length - 1; bindActive();
       if (pendingMove) pendingMove.targetLayer = activeLayer;
-      renderLayerList(); render();
+      renderLayerList(); if (tracePreview) updateFloatingTrace(); else render();
     }
     function moveLayerStack(step) {
       const next = activeLayer + step;
@@ -987,7 +1183,7 @@
         if (pendingMove.sourceLayer == null) pendingMove.source = null;
         pendingMove.targetLayer = moveTarget && moveTarget !== removed ? layers.indexOf(moveTarget) : activeLayer;
       }
-      renderLayerList(); render();
+      renderLayerList(); if (tracePreview) updateFloatingTrace(); else render();
     }
     function mergeDown() {
       if (!canMergeDown()) return;
@@ -1030,9 +1226,12 @@
     }
     function resetDocument(width = MAX_W, height = MAX_H) {
       stopLineSession(); stopRectangleSession(); cancelText(); remember();
-      pendingMove = null;
+      clearTimeout(traceUpdateTimer);
+      pendingMove = null; tracePreview = null; traceDrag = null;
+      traceSettingsPanel.hidden = true;
       layers = [emptyLayer(tr('Layer {number}', { number: 1 }))]; activeLayer = 0; backgroundCode = 0;
       references = []; selectedReference = -1;
+      traceSettings = { ...window.PIXIE_TRACE.defaults }; syncTraceControls();
       zxPreview = true; zxPreviewControl.classList.add('active'); zxPreviewControl.setAttribute('aria-pressed', 'true');
       attrMode = false; attrModeButton.classList.remove('active'); attrModeButton.setAttribute('aria-pressed', 'false');
       paperTransparent = true; updateSwatches();
@@ -1092,9 +1291,59 @@
       if (!s) { selectionOutline.replaceChildren(); return; }
       const outline = mark('rect', { x: s.x, y: s.y, width: s.w, height: s.h }, '#ff40ff');
       outline.setAttribute('stroke-dasharray', '4 3');
-      selectionOutline.replaceChildren(outline);
+      if (!tracePreview) { selectionOutline.replaceChildren(outline); return; }
+      const size = 7 / zoom;
+      const handles = [[s.x, s.y], [s.x + s.w / 2, s.y], [s.x + s.w, s.y],
+        [s.x, s.y + s.h / 2], [s.x + s.w, s.y + s.h / 2],
+        [s.x, s.y + s.h], [s.x + s.w / 2, s.y + s.h], [s.x + s.w, s.y + s.h]];
+      selectionOutline.replaceChildren(outline, ...handles.map(([x, y]) => {
+        const handle = mark('rect', { x: x - size / 2, y: y - size / 2, width: size, height: size }, '#ffffff');
+        handle.setAttribute('fill', '#ff40ff');
+        return handle;
+      }));
+    }
+    function traceHit(clientX, clientY) {
+      if (!selection || !tracePreview) return 'new';
+      const rect = screen.getBoundingClientRect();
+      const scaleX = rect.width / W, scaleY = rect.height / H;
+      const left = rect.left + selection.x * scaleX, right = left + selection.w * scaleX;
+      const top = rect.top + selection.y * scaleY, bottom = top + selection.h * scaleY;
+      const handles = [['nw', left, top], ['n', (left + right) / 2, top], ['ne', right, top],
+        ['w', left, (top + bottom) / 2], ['e', right, (top + bottom) / 2],
+        ['sw', left, bottom], ['s', (left + right) / 2, bottom], ['se', right, bottom]];
+      const hit = handles.find(([, x, y]) => Math.abs(clientX - x) <= 7 && Math.abs(clientY - y) <= 7);
+      if (hit) return hit[0];
+      const nearHorizontalEdge = clientX >= left && clientX <= right &&
+        (Math.abs(clientY - top) <= 6 || Math.abs(clientY - bottom) <= 6);
+      const nearVerticalEdge = clientY >= top && clientY <= bottom &&
+        (Math.abs(clientX - left) <= 6 || Math.abs(clientX - right) <= 6);
+      return nearHorizontalEdge || nearVerticalEdge ? 'move' : 'new';
+    }
+    function resizeTraceArea(area, handle, dx, dy, snap) {
+      let left = area.x, top = area.y, right = area.x + area.w - 1, bottom = area.y + area.h - 1;
+      if (handle.includes('w')) left = Math.max(0, Math.min(right, left + dx));
+      if (handle.includes('e')) right = Math.min(W - 1, Math.max(left, right + dx));
+      if (handle.includes('n')) top = Math.max(0, Math.min(bottom, top + dy));
+      if (handle.includes('s')) bottom = Math.min(H - 1, Math.max(top, bottom + dy));
+      const result = { x: left, y: top, w: right - left + 1, h: bottom - top + 1 };
+      return snap ? selectionRectangle({ x: left, y: top }, { x: right, y: bottom }, true) : result;
+    }
+    function queueTraceArea(area, target, immediate = false) {
+      clearTimeout(traceUpdateTimer);
+      if (immediate) { changeTraceArea(area, target); return; }
+      drawOverlay(target);
+      traceUpdateTimer = setTimeout(() => changeTraceArea(area, target), 50);
     }
     function updateCanvasCursor(p = cursorPoint) {
+      if (tracePreview) {
+        const rect = screen.getBoundingClientRect();
+        const hit = traceDrag?.kind || (p && traceHit(rect.left + (p.x + 0.5) * rect.width / W,
+          rect.top + (p.y + 0.5) * rect.height / H));
+        const resize = { n: 'ns-resize', s: 'ns-resize', e: 'ew-resize', w: 'ew-resize',
+          nw: 'nwse-resize', se: 'nwse-resize', ne: 'nesw-resize', sw: 'nesw-resize' };
+        screen.style.cursor = hit === 'move' ? (traceDrag ? 'grabbing' : 'grab') : resize[hit] || 'crosshair';
+        return;
+      }
       screen.style.cursor = drag?.action === 'move' || drag?.action === 'move-layer' ? 'grabbing'
         : tool === 'move-layer' || (tool === 'select' && contains(selection, p)) ? 'grab'
         : tool === 'text' ? 'text' : 'crosshair';
@@ -1102,6 +1351,7 @@
     function setTool(name) {
       if (tool === 'line' && name !== 'line') stopLineSession();
       if (rectangleSession && name !== rectangleSession.action) stopRectangleSession();
+      if (name !== 'select' && tracePreview) cancelTrace(false);
       tool = name;
       document.querySelectorAll('[data-tool]').forEach(b => b.classList.toggle('active', b.dataset.tool === name));
       updateCanvasCursor();
@@ -1186,17 +1436,23 @@
     }
     function finishPendingMove() {
       if (!pendingMove) return;
+      if (tracePreview?.move === pendingMove) { cancelTrace(false); return; }
       if (pendingMove.source) withLayer(pendingMove.sourceLayer, layers[pendingMove.sourceLayer],
         () => clear(pendingMove.source));
       withLayer(pendingMove.targetLayer, layers[pendingMove.targetLayer],
         () => stamp(pendingMove.data, pendingMove.target.x, pendingMove.target.y));
       pendingMove = null;
+      tracePreview = null;
+      updateReferenceFrame();
     }
     function removeSelectionPixels() {
+      if (tracePreview?.move === pendingMove) { cancelTrace(false); return; }
       if (!pendingMove) { clear(selection); return; }
       if (pendingMove.source) withLayer(pendingMove.sourceLayer, layers[pendingMove.sourceLayer],
         () => clear(pendingMove.source));
       pendingMove = null;
+      tracePreview = null;
+      updateReferenceFrame();
     }
     function moveTarget(p) {
       return { x: clamp(drag.source.x + p.x - drag.start.x, W - 1),
@@ -1598,13 +1854,14 @@
     });
     viewport.addEventListener('pointerdown', event => {
       if (event.target.closest('#stage')) return;
+      if (tracePreview) return;
       if (textSession) commitText();
       if (lineSession) stopLineSession();
       if (rectangleSession) stopRectangleSession();
       if (selection) { remember(); finishPendingMove(); selection = null; render(); }
     });
     document.addEventListener('pointerdown', event => {
-      if (selectedReference < 0 || event.target.closest('#reference-frame, .reference-row, #screen')) return;
+      if (tracePreview || selectedReference < 0 || event.target.closest('#reference-frame, .reference-row, #screen, #reference-trace, #trace-settings')) return;
       selectedReference = -1;
       renderReferenceList();
     });
@@ -1617,15 +1874,64 @@
       const dx = event.clientX - shapePress.x, dy = event.clientY - shapePress.y;
       if (dx * dx + dy * dy >= 9) shapePress.moved = true;
     }
+    function beginTraceDrag(event, p) {
+      const kind = traceHit(event.clientX, event.clientY);
+      traceDrag = { pointerId: event.pointerId, kind, start: p,
+        area: { ...tracePreview.area }, target: { ...pendingMove.target },
+        before: traceState(), moved: false };
+      screen.setPointerCapture(event.pointerId);
+      event.preventDefault();
+      updateCanvasCursor(p);
+    }
+    function moveTraceDrag(event, immediate = false) {
+      if (!traceDrag || traceDrag.pointerId !== event.pointerId) return;
+      const raw = point(event), p = { x: clamp(raw.x, W - 1), y: clamp(raw.y, H - 1) };
+      const dx = p.x - traceDrag.start.x, dy = p.y - traceDrag.start.y;
+      if (!dx && !dy && !traceDrag.moved) return;
+      traceDrag.moved = true;
+      if (traceDrag.kind === 'move') {
+        clearTimeout(traceUpdateTimer);
+        const target = { ...traceDrag.target,
+          x: clamp(traceDrag.target.x + dx, W - 1), y: clamp(traceDrag.target.y + dy, H - 1) };
+        pendingMove.target = target; selection = { ...target }; render();
+        return;
+      }
+      const area = traceDrag.kind === 'new'
+        ? selectionRectangle(traceDrag.start, p, event.shiftKey || shiftHeld)
+        : resizeTraceArea(traceDrag.area, traceDrag.kind, dx, dy, event.shiftKey || shiftHeld);
+      const target = traceDrag.kind === 'new' ? area : {
+        x: area.x + traceDrag.target.x - traceDrag.area.x,
+        y: area.y + traceDrag.target.y - traceDrag.area.y, w: area.w, h: area.h };
+      traceDrag.nextArea = area; traceDrag.nextTarget = target;
+      queueTraceArea(area, target, immediate);
+    }
+    function finishTraceDrag(event, cancelled = false) {
+      if (!traceDrag || traceDrag.pointerId !== event.pointerId) return false;
+      const original = traceDrag;
+      if (cancelled) {
+        clearTimeout(traceUpdateTimer);
+        changeTraceArea(original.area, original.target);
+      } else {
+        moveTraceDrag(event, true);
+        recordTraceChange(original.before);
+      }
+      traceDrag = null;
+      updateCursor(event);
+      return true;
+    }
     screen.addEventListener('contextmenu', event => {
       if (tool === 'draw' || tool === 'rect' || tool === 'fill-rect' || tool === 'ellipse' || tool === 'fill') event.preventDefault();
     });
     screen.addEventListener('pointerdown', event => {
+      if (tracePreview) {
+        if (event.button === 0) beginTraceDrag(event, point(event));
+        return;
+      }
       if (shapePress) return;
       const forceErase = event.button === 2 && (tool === 'draw' || tool === 'rect' || tool === 'fill-rect' || tool === 'ellipse' || tool === 'fill');
       if (event.button !== 0 && !forceErase) return;
       const p = point(event); if (!inside(p.x, p.y)) return;
-      if (selectedReference >= 0) {
+      if (selectedReference >= 0 && !pendingMove) {
         event.preventDefault();
         selectedReference = -1;
         renderReferenceList();
@@ -1686,6 +1992,7 @@
       if (drag.action === 'select') previewSelection(p, event.shiftKey || shiftHeld, event.clientX, event.clientY);
     });
     screen.addEventListener('pointermove', event => {
+      if (traceDrag) { moveTraceDrag(event); return; }
       updateShapePress(event);
       if (lineSession) {
         const raw = point(event), p = { x: clamp(raw.x, W - 1), y: clamp(raw.y, H - 1) };
@@ -1723,6 +2030,7 @@
     screen.addEventListener('pointermove', updateCursor);
     screen.addEventListener('pointerleave', () => { cursorPoint = null; paintCursor(); updateCanvasCursor(null); });
     screen.addEventListener('pointerup', event => {
+      if (finishTraceDrag(event)) return;
       if (shapePress?.pointerId === event.pointerId) {
         updateShapePress(event);
         const press = shapePress;
@@ -1772,9 +2080,11 @@
           }
         } else { remember(); finishPendingMove(); selection = null; }
       }
-      hideShapeMeasure(); drag = null; render(); updateCursor(event);
+      hideShapeMeasure(); drag = null; render();
+      updateCursor(event);
     });
-    screen.addEventListener('pointercancel', () => {
+    screen.addEventListener('pointercancel', event => {
+      if (finishTraceDrag(event, true)) return;
       if (shapePress) {
         if (shapePress.kind === 'line') stopLineSession();
         else stopRectangleSession();
@@ -1819,19 +2129,33 @@
     document.querySelector('#layer-down').onclick = () => moveLayerStack(-1);
     document.querySelector('#layer-merge').onclick = mergeDown;
     function captureSelection() {
+      if (tracePreview) {
+        clearTimeout(traceUpdateTimer);
+        if (traceDrag?.nextArea) changeTraceArea(traceDrag.nextArea, traceDrag.nextTarget);
+        else updateFloatingTrace();
+      }
       if (!pendingMove) return capture(selection);
       const data = pendingMove.data;
       return { ...data, x: selection.x, y: selection.y,
         bits: data.bits.slice(), colors: data.colors.slice(), opacity: data.opacity.slice() };
     }
-    document.querySelector('#copy').onclick = () => { if (selection) { clipboard = captureSelection(); note(tr('Selection copied.')); } };
+    document.querySelector('#copy').onclick = () => {
+      if (!selection) return;
+      clipboard = captureSelection();
+      note(tr(tracePreview ? 'Traced selection copied.' : 'Selection copied.'));
+    };
     document.querySelector('#cut').onclick = () => {
       if (!selection) return;
+      if (tracePreview) {
+        clipboard = captureSelection(); cancelTrace(false);
+        note(tr('Traced selection cut to clipboard.')); return;
+      }
       clipboard = captureSelection(); remember(); removeSelectionPixels(); render();
       note(tr('Selection cut.'));
     };
     document.querySelector('#paste').onclick = () => {
       if (!clipboard) { note(tr('Copy a selection first.')); return; }
+      if (tracePreview) cancelTrace(false);
       commitText(); remember();
       finishPendingMove();
       selection = { x: clipboard.x, y: clipboard.y, w: clipboard.w, h: clipboard.h };
@@ -1840,8 +2164,8 @@
       setTool('select'); render();
       note(tr('Floating paste at its original position. Drag it or deselect to apply.'));
     };
-    document.querySelector('#undo').onclick = () => restore(undo, redo);
-    document.querySelector('#redo').onclick = () => restore(redo, undo);
+    document.querySelector('#undo').onclick = () => tracePreview ? undoTrace() : restore(undo, redo);
+    document.querySelector('#redo').onclick = () => tracePreview ? redoTrace() : restore(redo, undo);
     document.querySelector('#swap').onclick = () => {
       [ink, paper] = [paper, ink];
       [inkTransparent, paperTransparent] = [paperTransparent, inkTransparent];
@@ -1879,6 +2203,7 @@
       stage.style.width = W * zoom + 'px';
       stage.style.height = H * zoom + 'px';
       renderReferences();
+      drawOverlay();
       if ((previous >= 8) !== (zoom >= 8)) { drawTransparency(); updateGrid(); }
       viewport.scrollLeft += x * (zoom - previous);
       viewport.scrollTop += y * (zoom - previous);
@@ -1974,7 +2299,11 @@
     function projectText() {
       const lines = [`width = ${W}`, `height = ${H}`, `active = ${activeLayer}`,
         `background = ${backgroundCode}`, `zx_preview = ${zxPreview}`];
-      const previews = pendingMove ? pendingPreviewLayers() : null;
+      for (const [key, value] of Object.entries(traceSettings)) {
+        const name = `trace_${key.replace(/[A-Z]/g, letter => '_' + letter.toLowerCase())}`;
+        lines.push(`${name} = ${typeof value === 'string' ? JSON.stringify(value) : value}`);
+      }
+      const previews = pendingMove && !tracePreview ? pendingPreviewLayers() : null;
       const projectLayers = layers.map((layer, index) => layerForPreview(index, previews));
       for (const layer of projectLayers) {
         lines.push('', '[[layer]]', `name = ${JSON.stringify(layer.name)}`,
@@ -2059,8 +2388,14 @@
         return { name: item.name, visible: item.visible, opacity: item.opacity,
           x: item.x, y: item.y, width: item.width, height: item.height, dataUrl: item.image_data };
       });
+      const storedTrace = {};
+      for (const key of Object.keys(window.PIXIE_TRACE.defaults)) {
+        const name = `trace_${key.replace(/[A-Z]/g, letter => '_' + letter.toLowerCase())}`;
+        if (parsed[name] !== undefined) storedTrace[key] = parsed[name];
+      }
       return { layers: loaded, references: loadedReferences, activeLayer: parsed.active,
-        background, zxPreview: parsed.zx_preview, width, height };
+        background, zxPreview: parsed.zx_preview, width, height,
+        traceSettings: window.PIXIE_TRACE.normalize(storedTrace) };
     }
     document.querySelector('#open').onclick = () => document.querySelector('#file').click();
     document.querySelector('#file').onchange = async event => {
@@ -2071,7 +2406,11 @@
       setDocumentSize(MAX_W, MAX_H);
       layers = [{ name: file.name, visible: true, solo: false, x: 0, y: 0,
         bitmap: bytes.slice(0, 6144), attrs: bytes.slice(6144), mask: new Uint8Array(6144).fill(0xff) }];
+      clearTimeout(traceUpdateTimer);
+      tracePreview = null; traceDrag = null;
       references = []; selectedReference = -1; renderReferences(); renderReferenceList();
+      traceSettingsPanel.hidden = true;
+      traceSettings = { ...window.PIXIE_TRACE.defaults }; syncTraceControls();
       activeLayer = 0; backgroundCode = -1; zxPreview = true;
       zxPreviewControl.classList.add('active'); zxPreviewControl.setAttribute('aria-pressed', 'true');
       bindActive(); updateBackgroundSwatches();
@@ -2085,14 +2424,14 @@
       if (!name) return;
       commitText();
       exportFileName = name;
-      download(name, flatten(), 'application/octet-stream');
+      download(name, flatten(tracePreview ? null : undefined), 'application/octet-stream');
     };
     document.querySelector('#save-png').onclick = async () => {
       const name = await askFileName('PNG', fileStem(projectFileName) + '.png', '.png');
       if (!name) return;
       commitText();
-      const { imageColors, coverage } = compositePixels();
-      const scr = zxPreview ? flatten() : null;
+      const { imageColors, coverage } = compositePixels(tracePreview ? null : undefined);
+      const scr = zxPreview ? flatten(tracePreview ? null : undefined) : null;
       const output = document.createElement('canvas');
       output.width = W; output.height = H;
       const outputContext = output.getContext('2d');
@@ -2127,6 +2466,10 @@
         }));
         stopLineSession(); stopRectangleSession(); cancelText();
         layers = project.layers; references = project.references; selectedReference = -1;
+        clearTimeout(traceUpdateTimer);
+        tracePreview = null; traceDrag = null;
+        traceSettingsPanel.hidden = true;
+        traceSettings = project.traceSettings; syncTraceControls();
         activeLayer = project.activeLayer; backgroundCode = project.background;
         zxPreview = project.zxPreview;
         zxPreviewControl.classList.toggle('active', zxPreview);
@@ -2189,6 +2532,12 @@
         if (code === 'KeyS') {
           event.preventDefault(); document.querySelector(event.shiftKey ? '#save' : '#save-project').click(); return;
         }
+        if (tracePreview && (code === 'KeyC' || code === 'KeyX')) {
+          event.preventDefault(); document.querySelector(code === 'KeyC' ? '#copy' : '#cut').click(); return;
+        }
+        if (tracePreview && code === 'KeyZ') {
+          event.preventDefault(); if (event.shiftKey) redoTrace(); else undoTrace(); return;
+        }
         if (typing) return;
         if (code === 'KeyZ') { event.preventDefault(); restore(event.shiftKey ? redo : undo, event.shiftKey ? undo : redo); }
         if (code === 'KeyC' && selection) { event.preventDefault(); document.querySelector('#copy').click(); }
@@ -2196,9 +2545,13 @@
         if (code === 'KeyV') { event.preventDefault(); document.querySelector('#paste').click(); }
         return;
       }
+      if (tracePreview && event.key === 'Enter' && !event.altKey && event.target.tagName !== 'SELECT') {
+        event.preventDefault(); applyTrace(); return;
+      }
       if (event.key === 'Escape') {
         if (lineSession) { event.preventDefault(); stopLineSession(); return; }
         if (rectangleSession) { event.preventDefault(); stopRectangleSession(); return; }
+        if (tracePreview) { event.preventDefault(); cancelTrace(); return; }
         if (selectedReference >= 0) {
           event.preventDefault(); selectedReference = -1; renderReferenceList(); return;
         }
@@ -2237,6 +2590,7 @@
         KeyI: () => document.querySelector('#swap').click(),
         KeyH: () => brightControl.click(), KeyG: () => gridControl.click(),
         KeyZ: () => zxPreviewControl.click(),
+        KeyK: activateTrace,
         KeyV: () => cycleLayerVisibility(active()),
       };
       if (code === 'KeyL') {
