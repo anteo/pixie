@@ -304,36 +304,15 @@
       cursorInfo.title = tr('INK and PAPER after SCR encoding');
       cursorInfo.setAttribute('aria-label', tr('SCR attributes under cursor'));
       if (!composite) composite = flatten(previews);
-      const image = ctx.createImageData(W, H), pixels = image.data;
       displayedScr = composite;
       displayedSoloLayers = [];
       const raw = !zxPreview || backgroundCode === -1 ? compositePixels(previews) : null;
       displayedCoverage = referenceCoverage || (backgroundCode === -1 ? raw.coverage : null);
-      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-        let rgb;
-        if (zxPreview) {
-          const a = composite[6144 + attrIndex(x, y)];
-          const on = !!(composite[offset(x, y)] & (128 >> (x & 7)));
-          const color = on ? a & 7 : (a >> 3) & 7;
-          rgb = paletteRgb[a & 64 && color ? color + 8 : color];
-        } else rgb = paletteRgb[raw.imageColors[y * MAX_W + x]];
-        const i = (y * W + x) * 4;
-        pixels[i] = rgb[0]; pixels[i + 1] = rgb[1]; pixels[i + 2] = rgb[2];
-        pixels[i + 3] = displayedCoverage && !displayedCoverage[y * W + x] ? 0 : 255;
-      }
+      const image = window.PIXIE_DISPLAY.renderNormal(ctx, W, H, composite, raw,
+        displayedCoverage, zxPreview, paletteRgb);
       ctx.putImageData(image, 0, 0); drawOverlay(outline); paintCursor();
     }
-    function topSoloPixel(soloLayers, x, y) {
-      for (let index = soloLayers.length - 1; index >= 0; index--) {
-        const layer = soloLayers[index];
-        const sx = x - layer.x, sy = y - layer.y;
-        if (!layerOpaque(layer, sx, sy)) continue;
-        const attr = layerAttr(layer, sx, sy);
-        const color = layerBit(layer, sx, sy) ? attr & 7 : (attr >> 3) & 7;
-        return { attr, color: attr & 64 && color ? color + 8 : color };
-      }
-      return null;
-    }
+    const topSoloPixel = window.PIXIE_DISPLAY.topSoloPixel;
     function renderSolo(soloLayers, outline, previews, referenceCoverage) {
       cursorInfo.title = tr(zxPreview
         ? 'Solo layers use their own attributes; dimmed pixels show ZX rendering'
@@ -342,29 +321,11 @@
       const scr = flatten(previews);
       const raw = !zxPreview || backgroundCode === -1 ? compositePixels(previews) : null;
       const coverage = referenceCoverage || (backgroundCode === -1 ? raw.coverage : null);
-      const image = ctx.createImageData(W, H), pixels = image.data;
       displayedScr = scr;
       displayedCoverage = coverage;
       displayedSoloLayers = soloLayers;
-      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-        const index = y * W + x, pixel = index * 4;
-        let color = raw ? raw.imageColors[y * MAX_W + x] : 0;
-        if (zxPreview) {
-          const attr = scr[6144 + attrIndex(x, y)];
-          const bitOn = !!(scr[offset(x, y)] & (128 >> (x & 7)));
-          const inkOrPaper = bitOn ? attr & 7 : (attr >> 3) & 7;
-          color = attr & 64 && inkOrPaper ? inkOrPaper + 8 : inkOrPaper;
-        }
-        let rgb = paletteRgb[color];
-        let alpha = coverage && !coverage[index] ? 0 : 255;
-        const soloPixel = topSoloPixel(soloLayers, x, y);
-        if (soloPixel) { rgb = paletteRgb[soloPixel.color]; alpha = 255; }
-        const dimmed = !soloPixel;
-        pixels[pixel] = dimmed ? Math.round(rgb[0] * 0.28) : rgb[0];
-        pixels[pixel + 1] = dimmed ? Math.round(rgb[1] * 0.28) : rgb[1];
-        pixels[pixel + 2] = dimmed ? Math.round(rgb[2] * 0.28) : rgb[2];
-        pixels[pixel + 3] = alpha;
-      }
+      const image = window.PIXIE_DISPLAY.renderSolo(ctx, W, H, scr, raw, coverage,
+        soloLayers, zxPreview, paletteRgb);
       ctx.putImageData(image, 0, 0); drawOverlay(outline); paintCursor();
     }
     function setZxPreview(enabled) {
