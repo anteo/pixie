@@ -119,7 +119,7 @@
     const drawingTools = new Set(['draw', 'line', 'rect', 'fill-rect', 'ellipse', 'fill']);
     const sizedDrawingTools = new Set(['draw', 'line', 'rect', 'fill-rect', 'ellipse']);
     const undo = [], redo = [];
-    const note = message => { status.textContent = message; };
+    const note = message => { status.textContent = message; status.title = message; };
     const inside = (x, y) => x >= 0 && x < W && y >= 0 && y < H;
     let editingLayer = null;
     const active = () => editingLayer || layers[activeLayer];
@@ -558,7 +558,7 @@
       changeTraceArea(area);
       renderReferences(); renderReferenceList();
       traceSettingsPanel.scrollIntoView({ block: 'start', behavior: 'smooth' });
-      note(tr('Tracing preview ready. Resize or redraw the area; Enter applies, Escape cancels.'));
+      note(tr('Trace ready. Enter applies; Escape cancels.'));
     }
     traceButton.onclick = activateTrace;
     document.querySelector('#trace-apply').onclick = applyTrace;
@@ -818,15 +818,15 @@
       document.querySelectorAll('[data-tool]').forEach(b => b.classList.toggle('active', b.dataset.tool === name));
       updateCanvasCursor();
       const tips = {
-        draw: 'Click an empty pixel to draw or a filled pixel to erase; drag to continue.',
-        line: 'Click for polyline points or drag one segment; Escape ends the polyline.',
-        rect: 'Draw an outlined rectangle with two clicks or a drag.',
-        'fill-rect': 'Draw a filled rectangle with two clicks or a drag.',
-        ellipse: 'Draw an ellipse with two clicks or a drag; Shift makes a circle.',
-        fill: 'Fill a connected area on the active layer.',
-        select: 'Select an area; drag its edges to resize the image, holding Shift for 8×8 sizes. Arrows move it by 1 pixel, Shift+arrows to the next cell boundary.',
-        'move-layer': 'Drag the canvas to move the active layer.',
-        text: 'Click the canvas and type. Enter or another canvas click creates a movable selection; Escape cancels.',
+        draw: 'Click to draw or erase; drag to continue.',
+        line: 'Click for segments, drag one; Shift locks direction.',
+        rect: 'Outline rectangle: click twice or drag.',
+        'fill-rect': 'Filled rectangle: click twice or drag.',
+        ellipse: 'Ellipse: click twice or drag; Shift makes a circle.',
+        fill: 'Fill a connected area.',
+        select: 'Select, move, or resize; Shift snaps to 8×8 cells.',
+        'move-layer': 'Drag to move; Shift+arrows snap to cells.',
+        text: 'Click to type; Shift snaps, Enter floats text.',
       };
       note(tr(tips[name]));
     }
@@ -1108,7 +1108,7 @@
         targetLayer: targetIndex >= 0 ? targetIndex : activeLayer };
       setTool('select');
       render();
-      note(tr('Floating text. Move or resize it, then deselect to apply.'));
+      note(tr('Text ready. Move, resize, or apply it.'));
     }
     const textUI = window.PIXIE_TEXT_UI.create({
       tr, note, textEntry, textPreview, textFont, textFontList, textLocalFonts,
@@ -1482,7 +1482,7 @@
           sourceLayer: null, targetLayer: activeLayer });
       }
       setTool('select'); render();
-      note(tr('Floating paste at its original position. Drag it or deselect to apply.'));
+      note(tr('Paste ready. Move or apply it.'));
     };
     document.querySelector('#undo').onclick = () => tracePreview ? undoTrace()
       : cancelDrawingGesture() || restore(undo, redo);
@@ -1702,7 +1702,7 @@
       const content = projectText();
       download(name, content, 'application/toml;charset=utf-8');
       savedProjectText = content;
-      note(tr('Downloaded a copy of {name}; this browser cannot overwrite the original file.', { name }));
+      note(tr('Downloaded a copy: {name}', { name }));
       return true;
     }
     document.querySelector('#save-project').onclick = saveProject;

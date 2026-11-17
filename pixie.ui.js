@@ -17,7 +17,7 @@ window.PIXIE_I18N = (() => {
       '#layers-panel .layers-heading strong': 'Layers',
       '#background-panel strong': 'Background',
       '#references-panel .references-heading strong': 'References',
-      '#status': 'New blank project. Add a layer or import SCR.',
+      '#status': 'Blank project.',
       '#new-dialog-title': 'New document',
       '#new-dialog legend': 'Size',
       '#new-size-screen-label': 'Full screen 256×192',

@@ -302,22 +302,25 @@
   .reference-handle.sw { left: -5px; bottom: -5px; cursor: nesw-resize; }
 
   #status-bar {
-    padding: 8px 14px;
+    height: 40px;
+    flex: none;
+    padding: 6px 14px;
     border-top: 1px solid #444;
     color: #bbb;
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 16px;
-    flex-wrap: wrap;
+    overflow: hidden;
+    white-space: nowrap;
   }
-  #status { flex: 1 1 240px; }
-  #document-info { display: flex; align-items: center; gap: 16px; white-space: nowrap; font: 12px ui-monospace, monospace; }
+  #status { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  #document-info { display: flex; flex: none; align-items: center; gap: 16px; white-space: nowrap; font: 12px ui-monospace, monospace; }
   #stroke-current { display: inline-flex; align-items: center; gap: 6px; }
   .stroke-indicator-slot { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 20px; height: 20px; border: 1px solid #8b909a; }
   .stroke-indicator-slot.transparent { background: conic-gradient(#777 25%, #ddd 0 50%, #777 0 75%, #ddd 0) 0 0 / 100% 100%; }
   #stroke-indicator.transparent { background: conic-gradient(#777 25%, #ddd 0 50%, #777 0 75%, #ddd 0) 0 0 / 100% 100%; }
-  #cursor-info { display: flex; align-items: center; gap: 7px; white-space: nowrap; }
+  #cursor-info { display: flex; flex: none; align-items: center; gap: 7px; white-space: nowrap; }
   #cursor-coords { display: inline-block; flex: none; width: 17ch; margin-right: 8px; font: 12px ui-monospace, monospace; }
   .cursor-swatch { display: inline-block; width: 15px; height: 15px; border: 1px solid #888; border-radius: 2px; box-shadow: 0 0 0 1px #111; }
   .cursor-swatch.transparent { background: conic-gradient(#777 25%, #ddd 0 50%, #777 0 75%, #ddd 0) 0 0 / 8px 8px; }
