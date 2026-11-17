@@ -67,7 +67,7 @@ window.PIXIE_TEXT = (() => {
 
 window.PIXIE_TEXT_UI = (() => {
   function create({ tr, note, textEntry, textPreview, textFont, textFontList, textLocalFonts,
-    textSize, textBold, textItalic, getActiveLayer, drawText, getSize, getDrawState }) {
+    textSize, textBold, textItalic, getActiveLayer, drawText, getSize, getDrawState, onPreview }) {
     let textSession = null;
     const chosenTextFont = () => textFont.value.trim() || textFont.dataset.previousFont || 'ZX ROM';
     const isRomFont = () => /^zx rom$/i.test(chosenTextFont());
@@ -92,7 +92,7 @@ window.PIXIE_TEXT_UI = (() => {
       const { W, H } = getSize();
       const { brightEnabled, bright, normal, ink, paper, inkTransparent, paperTransparent } = getDrawState();
       textPreview.clearRect(0, 0, W, H);
-      if (!textSession) return;
+      if (!textSession) { onPreview?.(); return; }
       const caretIndex = textEntry.selectionDirection === 'backward'
         ? textEntry.selectionStart : textEntry.selectionEnd;
       const data = textPixels(textEntry.value, caretIndex ?? textEntry.value.length);
@@ -111,6 +111,7 @@ window.PIXIE_TEXT_UI = (() => {
       textPreview.fillStyle = '#ff40ff';
       textPreview.fillRect(textSession.x + (data?.cursorX || 0), textSession.y, 1,
         data?.h || textCursorHeight());
+      onPreview?.();
     }
     function commitText() {
       if (!textSession) return;

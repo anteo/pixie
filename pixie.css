@@ -160,16 +160,23 @@
   .stroke-presets .stroke-size { width: 100%; height: 34px; }
   .stroke-square { display: block; width: var(--square-size); height: var(--square-size); background: currentColor; }
   .canvas-area { position: relative; min-width: 0; min-height: 0; }
-  .zoom-presets { position: absolute; right: 12px; bottom: 12px; display: flex; gap: 4px; padding: 4px; border: 1px solid #555; border-radius: 7px; background: #20232cee; }
+  .zoom-presets { position: absolute; z-index: 6; right: 12px; bottom: 12px; display: flex; gap: 4px; padding: 4px; border: 1px solid #555; border-radius: 7px; background: #20232cee; }
   .zoom-presets button { min-width: 34px; height: 28px; padding: 3px 6px; }
   .zoom-presets .icon { width: 18px; height: 18px; vertical-align: middle; }
+  .navigator-panel { flex: none; padding: 10px; }
+  #navigator { position: relative; width: 100%; cursor: grab; touch-action: none; overflow: hidden; }
+  #navigator[hidden] { display: none; }
+  #navigator.dragging { cursor: grabbing; }
+  #navigator-canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; }
+  #navigator-window { position: absolute; pointer-events: none; border: 1px solid #fff; background: #ffffff24; box-shadow: 0 0 0 1px #000, inset 0 0 0 1px #0008; }
   #viewport {
     width: 100%; height: 100%;
     overflow: auto;
     padding: 30px;
     overscroll-behavior: contain;
   }
-  #layers-panel { min-width: 0; min-height: 0; border-left: 1px solid #444; padding: 10px; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; }
+  #layers-panel { min-width: 0; min-height: 0; border-left: 1px solid #444; display: flex; flex-direction: column; }
+  #layers-content { min-width: 0; min-height: 0; flex: 1; padding: 10px; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; }
   .layers-heading { display: flex; align-items: center; justify-content: space-between; gap: 3px; }
   .layers-heading strong { margin-right: auto; }
   .layers-heading .icon-button { width: 27px; height: 27px; padding: 4px; }
@@ -236,7 +243,7 @@
   .trace-control select { display: block; width: 100%; margin-top: 4px; padding: 3px 4px; color: #eee; background: #30343e; border: 1px solid #5b606b; border-radius: 4px; }
   .trace-toggle { display: flex; align-items: center; gap: 5px; margin-top: 10px; color: #c5c8d0; font-size: 12px; }
   .trace-toggle input { margin: 0; accent-color: #a6a6ff; }
-  @media (max-width: 800px) { :root { --tool-rail-width: 48px; } .workspace { grid-template-columns: var(--tool-rail-width) minmax(0, 1fr) 188px; } #layers-panel { padding: 6px; } .layers-heading .icon-button { width: 23px; } }
+  @media (max-width: 800px) { :root { --tool-rail-width: 48px; } .workspace { grid-template-columns: var(--tool-rail-width) minmax(0, 1fr) 188px; } #layers-content, .navigator-panel { padding: 6px; } .layers-heading .icon-button { width: 23px; } }
 
   #stage {
     position: relative;

@@ -180,12 +180,14 @@
       <div class="reference-handle nw" data-handle="nw"></div><div class="reference-handle ne" data-handle="ne"></div>
       <div class="reference-handle se" data-handle="se"></div><div class="reference-handle sw" data-handle="sw"></div>
     </div></div>
-  </div><input id="text-entry" type="text" aria-label="Text on canvas" autocomplete="off"><div class="zoom-presets" role="group" aria-label="Quick zoom">
+  </div><input id="text-entry" type="text" aria-label="Text on canvas" autocomplete="off">
+  <div class="zoom-presets" role="group" aria-label="Zoom presets">
     <button id="zoom-1" title="Zoom 1× (Alt+1)">1×</button>
     <button id="zoom-2" title="Zoom 2× (Alt+2)">2×</button>
     <button id="zoom-fit" title="Fit screen (Alt+0)" aria-label="Fit screen"><svg class="icon"><use href="#i-fit"/></svg></button>
   </div></div>
   <aside id="layers-panel" aria-label="Layers">
+    <div id="layers-content">
     <div class="layers-heading"><strong>Layers</strong>
       <button id="layer-add" class="icon-button" title="Add layer (L)" aria-label="Add layer"><svg class="icon"><use href="#i-plus"/></svg></button>
       <button id="layer-up" class="icon-button" title="Raise layer (])" aria-label="Raise layer"><svg class="icon"><use href="#i-up"/></svg></button>
@@ -230,6 +232,13 @@
         <label class="trace-control"><span><span data-i18n="Dither density">Dither density</span><output>100%</output></span><input data-trace="ditherDensity" type="range" min="0" max="100" value="100"></label>
         <label class="trace-toggle"><input data-trace="optimizeClashing" type="checkbox"> <span data-i18n="Optimize clashing">Optimize clashing</span></label>
         <label class="trace-control"><span><span data-i18n="Clash strength">Clash strength</span><output>45%</output></span><input data-trace="clashStrength" type="range" min="0" max="100" value="45"></label>
+    </div>
+    </div>
+    <div class="navigator-panel" hidden>
+      <div id="navigator" hidden tabindex="0" aria-label="Canvas navigator" title="Click or drag to pan the canvas">
+        <canvas id="navigator-canvas" width="256" height="192" aria-hidden="true"></canvas>
+        <div id="navigator-window" aria-hidden="true"></div>
+      </div>
     </div>
   </aside>
 </div>

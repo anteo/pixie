@@ -15,6 +15,7 @@
     let savedProjectText = null;
     let projectDocumentId = 0, nextProjectDocumentId = 1;
     const screen = document.querySelector('#screen');
+    let navigatorUi = null;
     const referenceLayer = document.querySelector('#reference-layer');
     const referenceFrame = document.querySelector('#reference-frame');
     const referenceList = document.querySelector('#reference-list');
@@ -264,6 +265,7 @@
       const image = window.PIXIE_DISPLAY.renderNormal(ctx, W, H, composite, raw,
         displayedCoverage, zxPreview, paletteRgb);
       ctx.putImageData(image, 0, 0); drawOverlay(outline); paintCursor();
+      navigatorUi?.drawNavigator();
     }
     const topSoloPixel = window.PIXIE_DISPLAY.topSoloPixel;
     function renderSolo(soloLayers, outline, previews, referenceCoverage) {
@@ -280,6 +282,7 @@
       const image = window.PIXIE_DISPLAY.renderSolo(ctx, W, H, scr, raw, coverage,
         soloLayers, zxPreview, paletteRgb);
       ctx.putImageData(image, 0, 0); drawOverlay(outline); paintCursor();
+      navigatorUi?.drawNavigator();
     }
     function setZxPreview(enabled) {
       zxPreview = enabled;
@@ -398,8 +401,11 @@
     }
     const updateReferenceFrame = () => window.PIXIE_REFERENCES.updateFrame(
       referenceFrame, references, selectedReference, tracePreview, pendingMove, zoom);
-    const renderReferences = () => window.PIXIE_REFERENCES.render(
-      referenceLayer, referenceFrame, references, selectedReference, tracePreview, pendingMove, zoom);
+    const renderReferences = () => {
+      window.PIXIE_REFERENCES.render(referenceLayer, referenceFrame, references,
+        selectedReference, tracePreview, pendingMove, zoom);
+      navigatorUi?.drawNavigator();
+    };
     function reorderReference(sourceReference, targetReference, before) {
       const source = references.indexOf(sourceReference), target = references.indexOf(targetReference);
       if (source < 0 || target < 0) return;
@@ -1110,6 +1116,7 @@
       getSize: () => ({ W, H }),
       getDrawState: () => ({ inkTransparent, paperTransparent, brightEnabled, bright, normal,
         ink, paper, attr: activeAttr() }),
+      onPreview: () => navigatorUi?.drawNavigator(),
     });
     const { previewText, commitText, cancelText, startText } = textUI;
     document.addEventListener('click', event => {
@@ -1127,7 +1134,7 @@
       if (selection) { remember(); finishPendingMove(); selection = null; render(); }
     });
     document.addEventListener('pointerdown', event => {
-      if (tracePreview || selectedReference < 0 || event.target.closest('#reference-frame, .reference-row, #screen, #reference-trace, #trace-settings')) return;
+      if (tracePreview || selectedReference < 0 || event.target.closest('#reference-frame, .reference-row, #screen, #reference-trace, #trace-settings, #navigator')) return;
       selectedReference = -1;
       renderReferenceList();
     });
@@ -1504,11 +1511,19 @@
       setZxPreview(!zxPreview);
       note(tr(zxPreview ? 'ZX attribute preview on.' : 'ZX attribute preview off.'));
     };
-    const { zoomAt, zoomAtCenter, fitZoom } = window.PIXIE_VIEWPORT.bind({
+    navigatorUi = window.PIXIE_VIEWPORT.bind({
       viewport, stage, getSize: () => ({ width: W, height: H }),
       getZoom: () => zoom, setZoom: value => { zoom = value; },
       renderReferences, drawOverlay, drawTransparency, updateGrid,
+      navigator: document.querySelector('#navigator'),
+      navigatorCanvas: document.querySelector('#navigator-canvas'),
+      navigatorWindow: document.querySelector('#navigator-window'),
+      screen, textCanvas: textPreview.canvas,
+      getNavigatorScene: () => ({ references, tracing: tracePreview?.reference,
+        background: backgroundCode < 0 ? null :
+          (backgroundCode >= 8 ? bright[backgroundCode - 8] : normal[backgroundCode]) }),
     });
+    const { zoomAt, zoomAtCenter, fitZoom } = navigatorUi;
     function projectText() {
       const previews = pendingMove && !tracePreview ? pendingPreviewLayers() : null;
       return window.PIXIE_PROJECT.projectText({

@@ -61,7 +61,8 @@ window.PIXIE_I18N = (() => {
       '#attr-mode': ['Draw 8×8 cell attributes (A)', 'Draw cell attributes'],
       '[data-tool="text"]': ['Text: click the canvas and type; Shift snaps to a cell (T)', 'Text'],
       '#text-entry': [null, 'Text on canvas'],
-      '.zoom-presets': [null, 'Quick zoom'],
+      '.zoom-presets': [null, 'Zoom presets'],
+      '#navigator': ['Click or drag to pan the canvas', 'Canvas navigator'],
       '#zoom-1': ['Zoom 1× (Alt+1)'], '#zoom-2': ['Zoom 2× (Alt+2)'],
       '#zoom-fit': ['Fit screen (Alt+0)', 'Fit screen'],
       '#layers-panel': [null, 'Layers'],
@@ -314,7 +315,120 @@ window.PIXIE_PANEL_ROWS = (() => {
 
 window.PIXIE_VIEWPORT = (() => {
   function bind({ viewport, stage, getSize, getZoom, setZoom,
-    renderReferences, drawOverlay, drawTransparency, updateGrid }) {
+    renderReferences, drawOverlay, drawTransparency, updateGrid,
+    navigator, navigatorCanvas, navigatorWindow, screen, textCanvas, getNavigatorScene }) {
+    const navigatorContext = navigatorCanvas.getContext('2d');
+    const checker = document.createElement('canvas');
+    checker.width = checker.height = 8;
+    const checkerContext = checker.getContext('2d');
+    checkerContext.fillStyle = '#30343c';
+    checkerContext.fillRect(0, 0, 8, 8);
+    checkerContext.fillStyle = '#50545b';
+    checkerContext.fillRect(0, 0, 4, 4);
+    checkerContext.fillRect(4, 4, 4, 4);
+    const checkerPattern = navigatorContext.createPattern(checker, 'repeat');
+    let visibleArea = null, navigatorDrag = null;
+    function updateNavigatorFrame(redrawOnShow = true) {
+      const { width, height } = getSize();
+      const wasHidden = navigator.hidden;
+      navigator.hidden = viewport.scrollWidth <= viewport.clientWidth + 2 &&
+        viewport.scrollHeight <= viewport.clientHeight + 2;
+      navigator.parentElement.hidden = navigator.hidden;
+      if (navigator.hidden) { visibleArea = null; return; }
+      if (wasHidden && redrawOnShow !== false) requestAnimationFrame(drawNavigator);
+      const view = viewport.getBoundingClientRect();
+      const image = stage.getBoundingClientRect();
+      const scale = getZoom();
+      const left = Math.max(0, Math.min(width, (view.left - image.left) / scale));
+      const top = Math.max(0, Math.min(height, (view.top - image.top) / scale));
+      const right = Math.max(left, Math.min(width, (view.left + viewport.clientWidth - image.left) / scale));
+      const bottom = Math.max(top, Math.min(height, (view.top + viewport.clientHeight - image.top) / scale));
+      visibleArea = { x: left, y: top, w: right - left, h: bottom - top };
+      const previewWidth = navigator.clientWidth, previewHeight = navigator.clientHeight;
+      navigatorWindow.style.left = `${left * previewWidth / width}px`;
+      navigatorWindow.style.top = `${top * previewHeight / height}px`;
+      navigatorWindow.style.width = `${(right - left) * previewWidth / width}px`;
+      navigatorWindow.style.height = `${(bottom - top) * previewHeight / height}px`;
+    }
+    function drawNavigator() {
+      updateNavigatorFrame(false);
+      if (navigator.hidden) return;
+      const { width, height } = getSize();
+      if (navigatorCanvas.width !== width) navigatorCanvas.width = width;
+      if (navigatorCanvas.height !== height) navigatorCanvas.height = height;
+      navigator.style.height = `${Math.round(navigator.clientWidth * height / width)}px`;
+      updateNavigatorFrame(false);
+      const { background, references, tracing } = getNavigatorScene();
+      navigatorContext.fillStyle = checkerPattern;
+      navigatorContext.fillRect(0, 0, width, height);
+      if (background) {
+        navigatorContext.fillStyle = background;
+        navigatorContext.fillRect(0, 0, width, height);
+      }
+      for (const reference of references) {
+        if (!reference.visible || !reference.image || reference.opacity <= 0 ||
+            (tracing && reference !== tracing)) continue;
+        navigatorContext.globalAlpha = reference.opacity;
+        navigatorContext.drawImage(reference.image, reference.x, reference.y,
+          reference.width, reference.height);
+      }
+      navigatorContext.globalAlpha = 1;
+      navigatorContext.drawImage(screen, 0, 0);
+      navigatorContext.drawImage(textCanvas, 0, 0);
+    }
+    function navigatorPoint(event) {
+      const bounds = navigatorCanvas.getBoundingClientRect();
+      const { width, height } = getSize();
+      return { x: Math.max(0, Math.min(width, (event.clientX - bounds.left) * width / bounds.width)),
+        y: Math.max(0, Math.min(height, (event.clientY - bounds.top) * height / bounds.height)) };
+    }
+    function panFromNavigator(event) {
+      if (!navigatorDrag) return;
+      const point = navigatorPoint(event);
+      const scale = getZoom();
+      const image = stage.getBoundingClientRect(), view = viewport.getBoundingClientRect();
+      viewport.scrollLeft += image.left + (point.x - navigatorDrag.offsetX) * scale -
+        (view.left + viewport.clientWidth / 2);
+      viewport.scrollTop += image.top + (point.y - navigatorDrag.offsetY) * scale -
+        (view.top + viewport.clientHeight / 2);
+      updateNavigatorFrame();
+    }
+    navigator.addEventListener('pointerdown', event => {
+      if (event.button !== 0 || navigator.hidden) return;
+      event.preventDefault();
+      const point = navigatorPoint(event), area = visibleArea;
+      const inside = area && point.x >= area.x && point.x <= area.x + area.w &&
+        point.y >= area.y && point.y <= area.y + area.h;
+      navigatorDrag = { pointerId: event.pointerId,
+        offsetX: inside ? point.x - area.x - area.w / 2 : 0,
+        offsetY: inside ? point.y - area.y - area.h / 2 : 0 };
+      navigator.classList.add('dragging');
+      navigator.setPointerCapture(event.pointerId);
+      panFromNavigator(event);
+    });
+    navigator.addEventListener('pointermove', event => {
+      if (navigatorDrag?.pointerId === event.pointerId) panFromNavigator(event);
+    });
+    const finishNavigatorDrag = event => {
+      if (navigatorDrag?.pointerId !== event.pointerId) return;
+      navigatorDrag = null;
+      navigator.classList.remove('dragging');
+    };
+    navigator.addEventListener('pointerup', finishNavigatorDrag);
+    navigator.addEventListener('pointercancel', finishNavigatorDrag);
+    navigator.addEventListener('keydown', event => {
+      const directions = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
+      if (!directions[event.key]) return;
+      event.preventDefault(); event.stopPropagation();
+      const [dx, dy] = directions[event.key], step = event.shiftKey ? 192 : 48;
+      viewport.scrollLeft += dx * step;
+      viewport.scrollTop += dy * step;
+    });
+    viewport.addEventListener('scroll', updateNavigatorFrame);
+    if (window.ResizeObserver) {
+      new ResizeObserver(updateNavigatorFrame).observe(viewport);
+      new ResizeObserver(drawNavigator).observe(navigator.parentElement);
+    } else window.addEventListener('resize', drawNavigator);
     function zoomAt(value, clientX, clientY) {
       const next = Math.max(1, Math.min(24, value));
       const current = getZoom();
@@ -333,6 +447,7 @@ window.PIXIE_VIEWPORT = (() => {
       if ((current >= 8) !== (next >= 8)) { drawTransparency(); updateGrid(); }
       viewport.scrollLeft += x * (next - current);
       viewport.scrollTop += y * (next - current);
+      updateNavigatorFrame();
     }
     function zoomAtCenter(value) {
       const rect = viewport.getBoundingClientRect();
@@ -366,7 +481,8 @@ window.PIXIE_VIEWPORT = (() => {
     viewport.addEventListener('gestureend', event => {
       event.preventDefault(); safariGesture = false;
     }, { passive: false });
-    return { zoomAt, zoomAtCenter, fitZoom };
+    updateNavigatorFrame();
+    return { zoomAt, zoomAtCenter, fitZoom, drawNavigator };
   }
   return { bind };
 })();
