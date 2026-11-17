@@ -270,3 +270,58 @@ window.PIXIE_TRACE_CONTROLS = (() => {
   }
   return { bind };
 })();
+
+window.PIXIE_TRACE_HISTORY = (() => {
+  function bind({ getPreview, getDrag, setDrag, getMove, getSettings, setSettings,
+    getControls, changeArea, updateCursor, sameSelection, note, tr }) {
+    function state() {
+      const preview = getPreview(), move = getMove();
+      return { area: { ...preview.area }, target: { ...move.target }, settings: { ...getSettings() } };
+    }
+    function same(a, b) {
+      return sameSelection(a.area, b.area) && sameSelection(a.target, b.target)
+        && Object.keys(a.settings).every(key => a.settings[key] === b.settings[key]);
+    }
+    function record(before) {
+      const preview = getPreview();
+      if (!preview || !before || same(before, state())) return;
+      preview.history.push(before);
+      if (preview.history.length > 50) preview.history.shift();
+      preview.future.length = 0;
+    }
+    function restore(saved) {
+      getControls().clearTimer();
+      setSettings(window.PIXIE_TRACE.normalize(saved.settings));
+      getControls().sync();
+      changeArea(saved.area, saved.target);
+      updateCursor();
+    }
+    function undo() {
+      const preview = getPreview();
+      if (!preview) return;
+      getControls().flushHistory();
+      const drag = getDrag();
+      if (drag) {
+        setDrag(null); restore(drag.before);
+        note(tr('Tracing change undone.')); return;
+      }
+      const previous = preview.history.pop();
+      if (!previous) return;
+      preview.future.push(state());
+      restore(previous);
+      note(tr('Tracing change undone.'));
+    }
+    function redo() {
+      const preview = getPreview();
+      if (!preview || getDrag()) return;
+      getControls().flushHistory();
+      const next = preview.future.pop();
+      if (!next) return;
+      preview.history.push(state());
+      restore(next);
+      note(tr('Tracing change redone.'));
+    }
+    return { state, record, undo, redo };
+  }
+  return { bind };
+})();

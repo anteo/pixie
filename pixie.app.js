@@ -523,6 +523,17 @@
       event.target.value = '';
       if (added) { renderReferences(); renderReferenceList(); render(); }
     };
+    const traceHistory = window.PIXIE_TRACE_HISTORY.bind({
+      getPreview: () => tracePreview, getDrag: () => traceDrag, setDrag: value => { traceDrag = value; },
+      getMove: () => pendingMove, getSettings: () => traceSettings,
+      setSettings: value => { traceSettings = value; }, getControls: () => traceControlsUI,
+      changeArea: changeTraceArea, updateCursor: updateCanvasCursor,
+      sameSelection: window.PIXIE_GEOMETRY.sameSelection, note, tr,
+    });
+    const traceState = traceHistory.state;
+    const recordTraceChange = traceHistory.record;
+    const undoTrace = traceHistory.undo;
+    const redoTrace = traceHistory.redo;
     const traceControlsUI = window.PIXIE_TRACE_CONTROLS.bind({
       getSettings: () => traceSettings, setSettings: value => { traceSettings = value; },
       getPreview: () => tracePreview, traceState, recordTraceChange, updateFloatingTrace,
@@ -543,49 +554,6 @@
       tracePreview.move = pendingMove;
       selection = { ...target };
       render();
-    }
-    function traceState() {
-      return { area: { ...tracePreview.area }, target: { ...pendingMove.target }, settings: { ...traceSettings } };
-    }
-    function sameTraceState(a, b) {
-      return sameSelection(a.area, b.area) && sameSelection(a.target, b.target)
-        && Object.keys(a.settings).every(key => a.settings[key] === b.settings[key]);
-    }
-    function recordTraceChange(before) {
-      if (!tracePreview || !before || sameTraceState(before, traceState())) return;
-      tracePreview.history.push(before);
-      if (tracePreview.history.length > 50) tracePreview.history.shift();
-      tracePreview.future.length = 0;
-    }
-    function restoreTraceState(state) {
-      traceControlsUI.clearTimer();
-      traceSettings = window.PIXIE_TRACE.normalize(state.settings);
-      syncTraceControls();
-      changeTraceArea(state.area, state.target);
-      updateCanvasCursor();
-    }
-    function undoTrace() {
-      if (!tracePreview) return;
-      traceControlsUI.flushHistory();
-      if (traceDrag) {
-        const before = traceDrag.before;
-        traceDrag = null; restoreTraceState(before);
-        note(tr('Tracing change undone.')); return;
-      }
-      const previous = tracePreview.history.pop();
-      if (!previous) return;
-      tracePreview.future.push(traceState());
-      restoreTraceState(previous);
-      note(tr('Tracing change undone.'));
-    }
-    function redoTrace() {
-      if (!tracePreview || traceDrag) return;
-      traceControlsUI.flushHistory();
-      const next = tracePreview.future.pop();
-      if (!next) return;
-      tracePreview.history.push(traceState());
-      restoreTraceState(next);
-      note(tr('Tracing change redone.'));
     }
     function cancelTrace(announce = true) {
       if (!tracePreview) return;
