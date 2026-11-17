@@ -91,7 +91,6 @@
     let W = MAX_W, H = MAX_H;
     const offset = (x, y) => ((y & 0xc0) << 5) | ((y & 7) << 8) | ((y & 0x38) << 2) | (x >> 3);
     const attrIndex = (x, y) => (y >> 3) * 32 + (x >> 3);
-    const font = Uint8Array.from(atob('AAAAAAAAAAAAEBAQEAAQAAAkJAAAAAAAACR+JCR+JAAACD4oPgo+CABiZAgQJkYAABAoECpEOgAACBAAAAAAAAAECAgICAQAACAQEBAQIAAAABQIPggUAAAACAg+CAgAAAAAAAAICBAAAAAAPgAAAAAAAAAAGBgAAAACBAgQIAAAPEZKUmI8AAAYKAgICD4AADxCAjxAfgAAPEIMAkI8AAAIGChIfggAAH5AfAJCPAAAPEB8QkI8AAB+AgQIEBAAADxCPEJCPAAAPEJCPgI8AAAAABAAABAAAAAQAAAQECAAAAQIEAgEAAAAAD4APgAAAAAQCAQIEAAAPEIECAAIAAA8SlZeQDwAADxCQn5CQgAAfEJ8QkJ8AAA8QkBAQjwAAHhEQkJEeAAAfkB8QEB+AAB+QHxAQEAAADxCQE5CPAAAQkJ+QkJCAAA+CAgICD4AAAICAkJCPAAAREhwSERCAABAQEBAQH4AAEJmWkJCQgAAQmJSSkZCAAA8QkJCQjwAAHxCQnxAQAAAPEJCUko8AAB8QkJ8REIAADxAPAJCPAAA/hAQEBAQAABCQkJCQjwAAEJCQkIkGAAAQkJCQlokAABCJBgYJEIAAIJEKBAQEAAAfgQIECB+AAAOCAgICA4AAABAIBAIBAAAcBAQEBBwAAAQOFQQEBAAAAAAAAAAAP8AHCJ4ICB+AAAAOAQ8RDwAACAgPCIiPAAAABwgICAcAAAEBDxERDwAAAA4RHhAPAAADBAYEBAQAAAAPEREPAQ4AEBAeERERAAAEAAwEBA4AAAEAAQEBCQYACAoMDAoJAAAEBAQEBAMAAAAaFRUVFQAAAB4RERERAAAADhEREQ4AAAAeEREeEBAAAA8REQ8BAYAABwgICAgAAAAOEA4BHgAABA4EBAQDAAAAEREREQ4AAAAREQoKBAAAABEVFRUKAAAAEQoEChEAAAAREREPAQ4AAB8CBAgfAAADggwCAgOAAAICAgICAgAAHAQDBAQcAAAFCgAAAAAADxCmaGhmUI8'), c => c.charCodeAt(0));
     function emptyLayer(name) {
       return { name, visible: true, solo: false, x: 0, y: 0,
         bitmap: new Uint8Array(6144), attrs: new Uint8Array(768).fill(0x47),
@@ -2027,72 +2026,14 @@
       showShapeMeasure(`${size.w}×${size.h} px`, clientX, clientY);
     }
     const chosenTextFont = () => textFont.value.trim() || textFont.dataset.previousFont || 'ZX ROM';
-    function selectedTextFamily() {
-      return chosenTextFont();
-    }
     const isRomFont = () => /^zx rom$/i.test(chosenTextFont());
-    function textFontSpec() {
-      const size = Math.max(4, Math.min(96, Number(textSize.value) || 16));
-      const family = selectedTextFamily();
-      const cssFamily = ['sans-serif', 'serif', 'monospace'].includes(family.toLowerCase())
-        ? family.toLowerCase() : JSON.stringify(family);
-      return { size, face: `${textItalic.checked ? 'italic ' : ''}${textBold.checked ? 'bold ' : ''}${size}px ${cssFamily}, sans-serif` };
-    }
-    function textLineMetrics(context, size) {
-      const sample = context.measureText('Mg|Др');
-      const ascent = Math.ceil(Math.max(size, sample.fontBoundingBoxAscent || sample.actualBoundingBoxAscent || 0)) + 1;
-      const descent = Math.ceil(Math.max(size * 0.3,
-        sample.fontBoundingBoxDescent || sample.actualBoundingBoxDescent || 0)) + 1;
-      return { ascent, h: Math.min(160, ascent + descent) };
-    }
-    function textCursorHeight() {
-      if (isRomFont()) return 8;
-      const { size, face } = textFontSpec();
-      const context = document.createElement('canvas').getContext('2d');
-      context.font = face;
-      return textLineMetrics(context, size).h;
-    }
-    function rasterizeText(value, caretIndex = value.length) {
-      if (!value) return null;
-      if (isRomFont()) {
-        const w = value.length * 8, h = 8, bits = new Uint8Array(w * h);
-        for (let n = 0; n < value.length; n++) {
-          const code = value.charCodeAt(n);
-          if (code < 32 || code > 127) continue;
-          for (let row = 0; row < 8; row++) for (let col = 0; col < 8; col++)
-            bits[row * w + n * 8 + col] = !!(font[(code - 32) * 8 + row] & (128 >> col));
-        }
-        return { w, h, bits, cursorX: Math.min(caretIndex, value.length) * 8 };
-      }
-      const { size, face } = textFontSpec();
-      const canvas = document.createElement('canvas');
-      const context = canvas.getContext('2d', { willReadFrequently: true });
-      context.font = face;
-      const metrics = context.measureText(value);
-      const left = Math.ceil(Math.max(0, metrics.actualBoundingBoxLeft || 0)) + 1;
-      const { ascent, h } = textLineMetrics(context, size);
-      const textEndX = Math.min(2047, left + Math.round(metrics.width));
-      const cursorX = Math.min(2047, left + Math.round(context.measureText(value.slice(0, caretIndex)).width));
-      const w = Math.min(2048, Math.max(textEndX + 1,
-        Math.ceil(left + Math.max(metrics.width, metrics.actualBoundingBoxRight || 0)) + 1));
-      const scale = w * h < 50000 ? 4 : w * h < 150000 ? 3 : 2;
-      canvas.width = w * scale; canvas.height = h * scale;
-      context.setTransform(scale, 0, 0, scale, 0, 0);
-      context.font = face;
-      context.textBaseline = 'alphabetic';
-      context.fillStyle = '#fff';
-      context.fillText(value, left, ascent);
-      const rgba = context.getImageData(0, 0, canvas.width, canvas.height).data;
-      const bits = new Uint8Array(w * h);
-      const threshold = scale * scale * 255 * 0.45;
-      for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-        let coverage = 0;
-        for (let sy = 0; sy < scale; sy++) for (let sx = 0; sx < scale; sx++)
-          coverage += rgba[((y * scale + sy) * canvas.width + x * scale + sx) * 4 + 3];
-        bits[y * w + x] = coverage >= threshold ? 1 : 0;
-      }
-      return { w, h, bits, cursorX };
-    }
+    const textRasterOptions = () => ({
+      family: chosenTextFont(), size: Number(textSize.value),
+      bold: textBold.checked, italic: textItalic.checked,
+    });
+    const textCursorHeight = () => window.PIXIE_TEXT.cursorHeight(textRasterOptions());
+    const rasterizeText = (value, caretIndex = value.length) =>
+      window.PIXIE_TEXT.rasterize(value, caretIndex, textRasterOptions());
     function textPixels(value, caretIndex = value.length) {
       const mask = rasterizeText(value, caretIndex);
       if (!mask) return null;
