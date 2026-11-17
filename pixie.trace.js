@@ -69,8 +69,8 @@ window.PIXIE_TRACE = (() => {
     const { width: canvasWidth, height: canvasHeight, data: source } = imageData;
     const { x: x0, y: y0, w, h } = selection;
     const opacity = new Uint8Array(w * h);
-    const linear = new Float32Array(w * h * 3), cellByPixel = new Int16Array(w * h).fill(-1);
-    const groups = new Map();
+    const linear = new Float32Array(w * h * 3), cellByPixel = new Int32Array(w * h).fill(-1);
+    const groups = new Map(), positions = new Map(), cellIds = new Map();
     const contrast = 1 + options.contrast / 100;
     const brightness = options.brightness / 100 * 255;
     const saturation = options.saturation / 100;
@@ -80,8 +80,7 @@ window.PIXIE_TRACE = (() => {
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
       const documentX = x0 + x, documentY = y0 + y;
       const localX = documentX - layer.x, localY = documentY - layer.y;
-      if (documentX < 0 || documentX >= canvasWidth || documentY < 0 || documentY >= canvasHeight ||
-          localX < 0 || localX >= canvasWidth || localY < 0 || localY >= canvasHeight) continue;
+      if (documentX < 0 || documentX >= canvasWidth || documentY < 0 || documentY >= canvasHeight) continue;
       const pixel = (documentY * canvasWidth + documentX) * 4;
       const alpha = source[pixel + 3] / 255;
       if (alpha < 0.5) continue;
@@ -98,12 +97,18 @@ window.PIXIE_TRACE = (() => {
         const prepared = clamp(value + perturb);
         linear[index * 3 + channel] = toLinear(prepared);
       }
-      const cell = (localY >> 3) * 32 + (localX >> 3);
+      const cellX = Math.floor(localX / 8), cellY = Math.floor(localY / 8);
+      const key = `${cellX},${cellY}`;
+      if (!cellIds.has(key)) {
+        const id = cellIds.size;
+        cellIds.set(key, id); positions.set(id, { x: cellX, y: cellY });
+      }
+      const cell = cellIds.get(key);
       cellByPixel[index] = cell;
       if (!groups.has(cell)) groups.set(cell, []);
       groups.get(cell).push(index);
     }
-    return { linear, cellByPixel, groups, opacity };
+    return { linear, cellByPixel, groups, positions, opacity };
   }
   function fitPair(indices, linear, bright, paper, ink, linearPalette) {
     const paperRgb = linearPalette[bright * 8 + paper];
@@ -122,10 +127,10 @@ window.PIXIE_TRACE = (() => {
     }
     return { bright, paper, ink, error, paperLinear: paperRgb, delta, length };
   }
-  function chooseCellPairs(groups, linear, palette, options, pixelCount) {
+  function chooseCellPairs(groups, positions, linear, palette, options, pixelCount) {
     const colors = new Uint8Array(pixelCount);
     const linearPalette = palette.map(rgb => rgb.map(toLinear));
-    const chosen = new Map();
+    const chosen = new Map(), neighbors = new Map();
     for (const [cell, indices] of [...groups].sort((a, b) => a[0] - b[0])) {
       const candidates = [];
       for (let bright = 0; bright < 2; bright++) {
@@ -136,8 +141,9 @@ window.PIXIE_TRACE = (() => {
         }
       }
       candidates.sort((a, b) => a.error - b.error);
-      const left = cell % 32 ? chosen.get(cell - 1) : null;
-      const above = chosen.get(cell - 32);
+      const position = positions.get(cell);
+      const left = neighbors.get(`${position.x - 1},${position.y}`);
+      const above = neighbors.get(`${position.x},${position.y - 1}`);
       let best = candidates[0], bestScore = Infinity;
       for (const candidate of options.optimizeClashing ? candidates.slice(0, 8) : [best]) {
         const weight = options.clashStrength / 100 * 0.2 * indices.length / 64;
@@ -146,6 +152,7 @@ window.PIXIE_TRACE = (() => {
         if (score < bestScore) { best = candidate; bestScore = score; }
       }
       chosen.set(cell, best);
+      neighbors.set(`${position.x},${position.y}`, best);
       const attribute = best.ink | best.paper << 3 | best.bright << 6;
       for (const index of indices) colors[index] = attribute;
     }
@@ -196,7 +203,7 @@ window.PIXIE_TRACE = (() => {
   function convert(imageData, selection, layer, settings, palette, background) {
     const options = normalize(settings);
     const prepared = prepareImage(imageData, selection, layer, options, background);
-    const { chosen, colors } = chooseCellPairs(prepared.groups, prepared.linear, palette,
+    const { chosen, colors } = chooseCellPairs(prepared.groups, prepared.positions, prepared.linear, palette,
       options, selection.w * selection.h);
     const bits = renderDither(selection, prepared, chosen, options);
     return { ...selection, bits, colors, opacity: prepared.opacity };

@@ -92,10 +92,10 @@
     function emptyLayer(name) {
       return { name, visible: true, solo: false, x: 0, y: 0,
         bitmap: new Uint8Array(6144), attrs: new Uint8Array(768).fill(0x47),
-        mask: new Uint8Array(6144) };
+        mask: new Uint8Array(6144), extra: new Map() };
     }
     let layers = [emptyLayer(tr('Layer {number}', { number: 1 }))];
-    let activeLayer = 0, bitmap = layers[0].bitmap, attrs = layers[0].attrs, mask = layers[0].mask;
+    let activeLayer = 0;
     let references = [], selectedReference = -1, referenceDrag = null;
     let traceSettings = { ...window.PIXIE_TRACE.defaults }, tracePreview = null, traceDrag = null;
     let projectFileName = 'screen.pixie', exportFileName = 'screen.scr';
@@ -243,41 +243,88 @@
     const undo = [], redo = [];
     const note = message => { status.textContent = message; };
     const inside = (x, y) => x >= 0 && x < W && y >= 0 && y < H;
-    const active = () => layers[activeLayer];
-    function bindActive() { bitmap = active().bitmap; attrs = active().attrs; mask = active().mask; }
+    let editingLayer = null;
+    const active = () => editingLayer || layers[activeLayer];
+    const basePixel = (x, y) => x >= 0 && x < MAX_W && y >= 0 && y < MAX_H;
+    const extraKey = (x, y) => `${Math.floor(x / 8)},${Math.floor(y / 8)}`;
+    function extraCell(layer, x, y, create = false) {
+      const key = extraKey(x, y);
+      let cell = layer.extra?.get(key);
+      if (!cell && create) {
+        cell = { bitmap: new Uint8Array(8), mask: new Uint8Array(8), attr: 0x47 };
+        if (!layer.extra) layer.extra = new Map();
+        layer.extra.set(key, cell);
+      }
+      return cell;
+    }
+    function layerBit(layer, x, y) {
+      const bitMask = 128 >> (x & 7);
+      if (basePixel(x, y)) return !!(layer.bitmap[offset(x, y)] & bitMask);
+      const cell = extraCell(layer, x, y);
+      return !!(cell && cell.bitmap[y & 7] & bitMask);
+    }
+    function layerOpaque(layer, x, y) {
+      const bitMask = 128 >> (x & 7);
+      if (basePixel(x, y)) return !!(layer.mask[offset(x, y)] & bitMask);
+      const cell = extraCell(layer, x, y);
+      return !!(cell && cell.mask[y & 7] & bitMask);
+    }
+    function layerAttr(layer, x, y, fallback = 0x47) {
+      if (basePixel(x, y)) return layer.attrs[attrIndex(x, y)];
+      return extraCell(layer, x, y)?.attr ?? fallback;
+    }
+    function writeLayerBit(layer, x, y, on, opaque) {
+      const bitMask = 128 >> (x & 7);
+      if (basePixel(x, y)) {
+        const index = offset(x, y);
+        layer.bitmap[index] = on ? layer.bitmap[index] | bitMask : layer.bitmap[index] & ~bitMask;
+        layer.mask[index] = opaque ? layer.mask[index] | bitMask : layer.mask[index] & ~bitMask;
+        return;
+      }
+      const cell = extraCell(layer, x, y, on || opaque);
+      if (!cell) return;
+      const row = y & 7;
+      cell.bitmap[row] = on ? cell.bitmap[row] | bitMask : cell.bitmap[row] & ~bitMask;
+      cell.mask[row] = opaque ? cell.mask[row] | bitMask : cell.mask[row] & ~bitMask;
+    }
+    function writeLayerAttr(layer, x, y, value) {
+      if (basePixel(x, y)) layer.attrs[attrIndex(x, y)] = value;
+      else extraCell(layer, x, y, true).attr = value;
+    }
+    function cloneExtra(extra) {
+      return new Map([...(extra || [])].map(([key, cell]) => [key,
+        { bitmap: cell.bitmap.slice(), mask: cell.mask.slice(), attr: cell.attr }]));
+    }
+    function cloneLayer(layer) {
+      return { ...layer, bitmap: layer.bitmap.slice(), attrs: layer.attrs.slice(),
+        mask: layer.mask.slice(), extra: cloneExtra(layer.extra) };
+    }
     function bit(x, y) {
       const sx = x - active().x, sy = y - active().y;
-      return inside(sx, sy) && !!(bitmap[offset(sx, sy)] & (128 >> (sx & 7)));
+      return layerBit(active(), sx, sy);
     }
     function setBit(x, y, on, opaque = on ? !inkTransparent : !paperTransparent) {
       const sx = x - active().x, sy = y - active().y;
-      if (!inside(sx, sy)) return;
-      const index = offset(sx, sy), bitMask = 128 >> (sx & 7);
-      bitmap[index] = on ? bitmap[index] | bitMask : bitmap[index] & ~bitMask;
-      if (opaque) mask[index] |= bitMask;
-      else mask[index] &= ~bitMask;
+      writeLayerBit(active(), sx, sy, on, opaque);
     }
     function getAttr(x, y) {
       const sx = x - active().x, sy = y - active().y;
-      return inside(sx, sy) ? attrs[attrIndex(sx, sy)] : activeAttr();
+      return layerAttr(active(), sx, sy, activeAttr());
     }
     function setAttr(x, y, value) {
       const sx = x - active().x, sy = y - active().y;
-      if (inside(sx, sy)) attrs[attrIndex(sx, sy)] = value;
+      writeLayerAttr(active(), sx, sy, value);
     }
     function paintAttrCell(x, y) {
       const sx = x - active().x, sy = y - active().y;
-      if (!inside(sx, sy)) return;
       const x0 = sx & ~7, y0 = sy & ~7;
-      const cell = attrIndex(sx, sy);
-      attrs[cell] = paperTransparent
-        ? (attrs[cell] & 0x38) | ink | (brightEnabled ? 64 : 0)
-        : activeAttr();
+      const previous = layerAttr(active(), sx, sy);
+      writeLayerAttr(active(), sx, sy, paperTransparent
+        ? (previous & 0x38) | ink | (brightEnabled ? 64 : 0) : activeAttr());
       for (let py = y0; py < y0 + 8; py++) {
         for (let px = x0; px < x0 + 8; px++) {
-          const index = offset(px, py), bitMask = 128 >> (px & 7);
-          if (bitmap[index] & bitMask ? !inkTransparent : !paperTransparent) mask[index] |= bitMask;
-          else mask[index] &= ~bitMask;
+          const on = layerBit(active(), px, py);
+          writeLayerBit(active(), px, py, on, on ? !inkTransparent : !paperTransparent);
         }
       }
     }
@@ -294,27 +341,25 @@
         note(tr('{kind} of floating selection changed.', { kind: kind.toUpperCase() }));
         return;
       }
-      const x0 = Math.max(0, selection.x - active().x);
-      const y0 = Math.max(0, selection.y - active().y);
-      const x1 = Math.min(W, selection.x + selection.w - active().x);
-      const y1 = Math.min(H, selection.y + selection.h - active().y);
+      const x0 = Math.max(0, selection.x) - active().x;
+      const y0 = Math.max(0, selection.y) - active().y;
+      const x1 = Math.min(W, selection.x + selection.w) - active().x;
+      const y1 = Math.min(H, selection.y + selection.h) - active().y;
       if (x0 >= x1 || y0 >= y1) return;
       remember();
-      for (let cy = y0 >> 3; cy <= (y1 - 1) >> 3; cy++) {
-        for (let cx = x0 >> 3; cx <= (x1 - 1) >> 3; cx++) {
-          const cell = cy * 32 + cx;
+      for (let cy = Math.floor(y0 / 8); cy <= Math.floor((y1 - 1) / 8); cy++) {
+        for (let cx = Math.floor(x0 / 8); cx <= Math.floor((x1 - 1) / 8); cx++) {
           if (index === 8) continue;
-          attrs[cell] = kind === 'ink' ? (attrs[cell] & ~7) | index
-            : (attrs[cell] & ~0x38) | (index << 3);
+          const x = cx * 8, y = cy * 8, before = layerAttr(active(), x, y);
+          writeLayerAttr(active(), x, y, kind === 'ink' ? (before & ~7) | index
+            : (before & ~0x38) | (index << 3));
         }
       }
       for (let y = y0; y < y1; y++) {
         for (let x = x0; x < x1; x++) {
-          const byte = offset(x, y), bitMask = 128 >> (x & 7);
-          const isInk = !!(bitmap[byte] & bitMask);
+          const isInk = layerBit(active(), x, y);
           if (isInk !== (kind === 'ink')) continue;
-          if (index === 8) mask[byte] &= ~bitMask;
-          else mask[byte] |= bitMask;
+          writeLayerBit(active(), x, y, isInk, index !== 8);
         }
       }
       render();
@@ -333,10 +378,7 @@
         references: references.map(reference => ({ ...reference })), selectedReference,
         selection: tracing ? (tracePreview.previousSelection ? { ...tracePreview.previousSelection } : null)
           : selection ? { ...selection } : null,
-        pendingMove: tracing ? null : copyMove(pendingMove), layers: layers.map(layer => ({
-        name: layer.name, visible: layer.visible, solo: !!layer.solo, x: layer.x, y: layer.y,
-        bitmap: layer.bitmap.slice(), attrs: layer.attrs.slice(), mask: layer.mask.slice(),
-      })) };
+        pendingMove: tracing ? null : copyMove(pendingMove), layers: layers.map(cloneLayer) };
     }
     function remember(previousSelection = tracePreview ? tracePreview.previousSelection : selection) {
       const saved = snapshot();
@@ -357,7 +399,7 @@
       references = saved.references.map(reference => ({ ...reference }));
       selectedReference = saved.selectedReference;
       setDocumentSize(saved.width, saved.height);
-      bindActive(); selection = saved.selection ? { ...saved.selection } : null;
+      selection = saved.selection ? { ...saved.selection } : null;
       pendingMove = copyMove(saved.pendingMove);
       updateBackgroundSwatches(); renderLayerList(); renderReferenceList(); renderReferences(); render(); updateCanvasCursor();
     }
@@ -377,16 +419,13 @@
       for (let index = 0; index < sourceLayers.length; index++) {
         const layer = layerForPreview(index, previews, sourceLayers);
         if (!layer.visible) continue;
-        for (let sy = 0; sy < H; sy++) {
-          const y = sy + layer.y;
-          if (y < 0 || y >= H) continue;
-          for (let sx = 0; sx < W; sx++) {
-            const byte = offset(sx, sy), bitMask = 128 >> (sx & 7);
-            if (!(layer.mask[byte] & bitMask)) continue;
-            const x = sx + layer.x;
-            if (x < 0 || x >= W) continue;
-            const attr = layer.attrs[attrIndex(sx, sy)];
-            const on = !!(layer.bitmap[byte] & bitMask);
+        for (let y = 0; y < H; y++) {
+          const sy = y - layer.y;
+          for (let x = 0; x < W; x++) {
+            const sx = x - layer.x;
+            if (!layerOpaque(layer, sx, sy)) continue;
+            const attr = layerAttr(layer, sx, sy);
+            const on = layerBit(layer, sx, sy);
             const color = on ? attr & 7 : (attr >> 3) & 7;
             const cell = attrIndex(x, y);
             cellOwner[cell] = index;
@@ -507,11 +546,9 @@
       for (let index = soloLayers.length - 1; index >= 0; index--) {
         const layer = soloLayers[index];
         const sx = x - layer.x, sy = y - layer.y;
-        if (!inside(sx, sy)) continue;
-        const byte = offset(sx, sy), bitMask = 128 >> (sx & 7);
-        if (!(layer.mask[byte] & bitMask)) continue;
-        const attr = layer.attrs[attrIndex(sx, sy)];
-        const color = layer.bitmap[byte] & bitMask ? attr & 7 : (attr >> 3) & 7;
+        if (!layerOpaque(layer, sx, sy)) continue;
+        const attr = layerAttr(layer, sx, sy);
+        const color = layerBit(layer, sx, sy) ? attr & 7 : (attr >> 3) & 7;
         return { attr, color: attr & 64 && color ? color + 8 : color };
       }
       return null;
@@ -605,7 +642,7 @@
       remember();
       const [moved] = layers.splice(source, 1);
       layers.splice(insertion, 0, moved);
-      activeLayer = layers.indexOf(selectedLayer); bindActive();
+      activeLayer = layers.indexOf(selectedLayer);
       if (pendingMove) {
         pendingMove.sourceLayer = moveSource ? layers.indexOf(moveSource) : null;
         pendingMove.targetLayer = layers.indexOf(moveTarget);
@@ -687,7 +724,7 @@
           if (activeLayer === index) return;
           stopLineSession(); stopRectangleSession();
           if (selection) remember();
-          activeLayer = index; bindActive();
+          activeLayer = index;
           if (pendingMove) pendingMove.targetLayer = index;
           for (const item of list.children) item.classList.toggle('active', Number(item.dataset.index) === index);
           document.querySelector('#layer-up').disabled = activeLayer === layers.length - 1;
@@ -1148,7 +1185,7 @@
       remember();
       const number = layers.length + 1;
       layers.push(emptyLayer(tr('Layer {number}', { number })));
-      activeLayer = layers.length - 1; bindActive();
+      activeLayer = layers.length - 1;
       if (pendingMove) pendingMove.targetLayer = activeLayer;
       renderLayerList(); if (tracePreview) updateFloatingTrace(); else render();
     }
@@ -1159,7 +1196,7 @@
       const moveTarget = pendingMove ? layers[pendingMove.targetLayer] : null;
       remember();
       [layers[activeLayer], layers[next]] = [layers[next], layers[activeLayer]];
-      activeLayer = next; bindActive();
+      activeLayer = next;
       if (pendingMove) {
         pendingMove.sourceLayer = moveSource ? layers.indexOf(moveSource) : null;
         pendingMove.targetLayer = layers.indexOf(moveTarget);
@@ -1176,7 +1213,6 @@
       const moveTarget = pendingMove ? layers[pendingMove.targetLayer] : null;
       remember(); layers.splice(index, 1);
       activeLayer = removed === selected ? Math.min(index, layers.length - 1) : layers.indexOf(selected);
-      bindActive();
       if (pendingMove) {
         const sourceIndex = moveSource && moveSource !== removed ? layers.indexOf(moveSource) : -1;
         pendingMove.sourceLayer = sourceIndex >= 0 ? sourceIndex : null;
@@ -1184,6 +1220,73 @@
         pendingMove.targetLayer = moveTarget && moveTarget !== removed ? layers.indexOf(moveTarget) : activeLayer;
       }
       renderLayerList(); if (tracePreview) updateFloatingTrace(); else render();
+    }
+    function forEachOpaquePixel(layer, visit) {
+      for (let y = 0; y < MAX_H; y++) for (let x = 0; x < MAX_W; x++) {
+        if (layerOpaque(layer, x, y)) visit(x + layer.x, y + layer.y, layer, x, y);
+      }
+      for (const [key, cell] of layer.extra || []) {
+        const [cellX, cellY] = key.split(',').map(Number);
+        for (let row = 0; row < 8; row++) for (let col = 0; col < 8; col++) {
+          if (!(cell.mask[row] & (128 >> col))) continue;
+          const x = cellX * 8 + col, y = cellY * 8 + row;
+          visit(x + layer.x, y + layer.y, layer, x, y);
+        }
+      }
+    }
+    function mergeOffscreenPixels(merged, pair) {
+      const cells = new Map();
+      for (const [order, layer] of pair.entries()) {
+        forEachOpaquePixel(layer, (x, y, source, sx, sy) => {
+          if (inside(x, y)) return;
+          const key = extraKey(x, y);
+          if (!cells.has(key)) cells.set(key, []);
+          const attr = layerAttr(source, sx, sy);
+          const color = layerBit(source, sx, sy) ? attr & 7 : attr >> 3 & 7;
+          cells.get(key).push({ x, y, color: attr & 64 && color ? color + 8 : color, weight: order ? 4 : 1 });
+        });
+      }
+      for (const [key, outside] of cells) {
+        const [cellX, cellY] = key.split(',').map(Number);
+        const x0 = cellX * 8, y0 = cellY * 8;
+        const colors = new Int8Array(64).fill(-1), weights = new Uint8Array(64);
+        for (let row = 0; row < 8; row++) for (let col = 0; col < 8; col++) {
+          const x = x0 + col, y = y0 + row;
+          if (!inside(x, y) || !layerOpaque(merged, x, y)) continue;
+          const attr = layerAttr(merged, x, y);
+          const color = layerBit(merged, x, y) ? attr & 7 : attr >> 3 & 7;
+          const index = row * 8 + col;
+          colors[index] = attr & 64 && color ? color + 8 : color;
+          weights[index] = 4;
+        }
+        for (const pixel of outside) {
+          const index = (pixel.y - y0) * 8 + pixel.x - x0;
+          colors[index] = pixel.color; weights[index] = pixel.weight;
+        }
+        let bestScore = Infinity, bestInk = 0, bestPaper = 0, bestBright = 0;
+        for (let brightState = 0; brightState < 2; brightState++) {
+          for (let paper = 0; paper < 8; paper++) for (let ink = 0; ink < 8; ink++) {
+            const paperCode = brightState && paper ? paper + 8 : paper;
+            const inkCode = brightState && ink ? ink + 8 : ink;
+            let score = 0;
+            for (let i = 0; i < 64; i++) {
+              if (colors[i] < 0) continue;
+              score += weights[i] * Math.min(colorDistance[colors[i]][paperCode], colorDistance[colors[i]][inkCode]);
+            }
+            if (score < bestScore) {
+              bestScore = score; bestInk = ink; bestPaper = paper; bestBright = brightState;
+            }
+          }
+        }
+        writeLayerAttr(merged, x0, y0, bestInk | bestPaper << 3 | bestBright << 6);
+        const inkCode = bestBright && bestInk ? bestInk + 8 : bestInk;
+        const paperCode = bestBright && bestPaper ? bestPaper + 8 : bestPaper;
+        for (let i = 0; i < 64; i++) {
+          const x = x0 + i % 8, y = y0 + Math.floor(i / 8), opaque = colors[i] >= 0;
+          const on = opaque && colorDistance[colors[i]][inkCode] < colorDistance[colors[i]][paperCode];
+          writeLayerBit(merged, x, y, on, opaque);
+        }
+      }
     }
     function mergeDown() {
       if (!canMergeDown()) return;
@@ -1197,10 +1300,12 @@
       for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
         if (coverage[y * W + x]) mergedMask[offset(x, y)] |= 128 >> (x & 7);
       }
-      layers[lowerIndex] = { name: pair[0].name, visible: true, solo: pair.some(layer => layer.solo), x: 0, y: 0,
-        bitmap: encoded.slice(0, 6144), attrs: encoded.slice(6144), mask: mergedMask };
+      const merged = { name: pair[0].name, visible: true, solo: pair.some(layer => layer.solo), x: 0, y: 0,
+        bitmap: encoded.slice(0, 6144), attrs: encoded.slice(6144), mask: mergedMask, extra: new Map() };
+      mergeOffscreenPixels(merged, pair);
+      layers[lowerIndex] = merged;
       layers.splice(activeLayer, 1);
-      activeLayer = lowerIndex; bindActive();
+      activeLayer = lowerIndex;
       renderLayerList(); render(); note(tr('Merged with layer below.'));
     }
     function setDocumentSize(width, height, resetScroll = false) {
@@ -1237,7 +1342,7 @@
       paperTransparent = true; updateSwatches();
       projectFileName = 'screen.pixie'; exportFileName = 'screen.scr';
       setDocumentSize(width, height, true);
-      bindActive(); selection = null; setTool('draw');
+      selection = null; setTool('draw');
       updateBackgroundSwatches(); renderLayerList(); renderReferenceList(); render(); fitZoom();
       note(tr('New blank document.'));
     }
@@ -1390,7 +1495,7 @@
         const i = y * s.w + x, sx = s.x + x, sy = s.y + y;
         bits[i] = bit(sx, sy) ? 1 : 0; colors[i] = getAttr(sx, sy);
         const lx = sx - active().x, ly = sy - active().y;
-        opacity[i] = inside(lx, ly) && !!(mask[offset(lx, ly)] & (128 >> (lx & 7))) ? 1 : 0;
+        opacity[i] = layerOpaque(active(), lx, ly) ? 1 : 0;
       }
       return { x: s.x, y: s.y, w: s.w, h: s.h, bits, colors, opacity };
     }
@@ -1400,19 +1505,16 @@
     function stamp(data, x0, y0) {
       for (let y = 0; y < data.h; y++) for (let x = 0; x < data.w; x++) {
         const dx = x0 + x, dy = y0 + y;
-        if (!inside(dx, dy)) continue;
         const i = y * data.w + x;
         if (!data.opacity[i]) continue;
         setBit(dx, dy, !!data.bits[i], true); setAttr(dx, dy, data.colors[i]);
       }
     }
     function withLayer(index, layer, action) {
-      const originalIndex = activeLayer, originalBitmap = bitmap, originalAttrs = attrs, originalMask = mask;
-      activeLayer = index; bitmap = layer.bitmap; attrs = layer.attrs; mask = layer.mask;
+      const originalIndex = activeLayer, originalLayer = editingLayer;
+      activeLayer = index; editingLayer = layer;
       try { action(); }
-      finally {
-        activeLayer = originalIndex; bitmap = originalBitmap; attrs = originalAttrs; mask = originalMask;
-      }
+      finally { activeLayer = originalIndex; editingLayer = originalLayer; }
     }
     function movePreviewLayers(source, data, target, sourceLayer, targetLayer) {
       const previews = new Map();
@@ -1421,7 +1523,7 @@
         let layer = previews.get(index);
         if (!layer) {
           const original = layers[index];
-          layer = { ...original, bitmap: original.bitmap.slice(), attrs: original.attrs.slice(), mask: original.mask.slice() };
+          layer = cloneLayer(original);
           previews.set(index, layer);
         }
         withLayer(index, layer, action);
@@ -1561,12 +1663,13 @@
     function fillArea(point, forceErase, previousSelection) {
       const layer = active();
       const sx = point.x - layer.x, sy = point.y - layer.y;
-      if (!inside(sx, sy)) return;
       if (attrMode && !forceErase) {
-        const columns = Math.ceil(W / 8), rows = Math.ceil(H / 8);
+        const left = Math.floor(-layer.x / 8), top = Math.floor(-layer.y / 8);
+        const columns = Math.floor((W - 1 - layer.x) / 8) - left + 1;
+        const rows = Math.floor((H - 1 - layer.y) / 8) - top + 1;
         const seen = new Uint8Array(columns * rows), queue = new Int32Array(columns * rows);
-        const startX = sx >> 3, startY = sy >> 3;
-        const source = attrs[attrIndex(sx, sy)];
+        const startX = Math.floor(sx / 8) - left, startY = Math.floor(sy / 8) - top;
+        const source = layerAttr(layer, sx, sy);
         let head = 0, tail = 0;
         queue[tail++] = startY * columns + startX;
         seen[startY * columns + startX] = 1;
@@ -1575,52 +1678,49 @@
           for (const next of [x > 0 ? cell - 1 : -1, x + 1 < columns ? cell + 1 : -1,
             y > 0 ? cell - columns : -1, y + 1 < rows ? cell + columns : -1]) {
             if (next < 0 || seen[next]) continue;
-            const nx = next % columns, ny = Math.floor(next / columns);
-            if (layer.x + nx * 8 >= W || layer.y + ny * 8 >= H ||
-                layer.x + (nx + 1) * 8 <= 0 || layer.y + (ny + 1) * 8 <= 0 ||
-                attrs[attrIndex(nx * 8, ny * 8)] !== source) continue;
+            const nx = left + next % columns, ny = top + Math.floor(next / columns);
+            if (layerAttr(layer, nx * 8, ny * 8) !== source) continue;
             seen[next] = 1; queue[tail++] = next;
           }
         }
         remember(previousSelection);
         for (let i = 0; i < tail; i++) {
           const cell = queue[i], x = cell % columns, y = Math.floor(cell / columns);
-          paintAttrCell(layer.x + x * 8, layer.y + y * 8);
+          paintAttrCell(layer.x + (left + x) * 8, layer.y + (top + y) * 8);
         }
         return;
       }
       const keyAt = (x, y) => {
-        const index = offset(x, y), bitMask = 128 >> (x & 7);
-        if (!(mask[index] & bitMask)) return -1;
-        const value = attrs[attrIndex(x, y)], color = bitmap[index] & bitMask ? value & 7 : value >> 3 & 7;
+        const localX = x - layer.x, localY = y - layer.y;
+        if (!layerOpaque(layer, localX, localY)) return -1;
+        const value = layerAttr(layer, localX, localY);
+        const color = layerBit(layer, localX, localY) ? value & 7 : value >> 3 & 7;
         return color && value & 64 ? color + 8 : color;
       };
-      const source = keyAt(sx, sy);
+      const source = keyAt(point.x, point.y);
       const seen = new Uint8Array(W * H), queue = new Int32Array(W * H);
       let head = 0, tail = 0;
-      queue[tail++] = sy * W + sx;
-      seen[sy * W + sx] = 1;
+      queue[tail++] = point.y * W + point.x;
+      seen[point.y * W + point.x] = 1;
       while (head < tail) {
         const cell = queue[head++], x = cell % W, y = Math.floor(cell / W);
         for (const next of [x > 0 ? cell - 1 : -1, x + 1 < W ? cell + 1 : -1,
           y > 0 ? cell - W : -1, y + 1 < H ? cell + W : -1]) {
           if (next < 0 || seen[next]) continue;
           const nx = next % W, ny = Math.floor(next / W);
-          if (!inside(nx + layer.x, ny + layer.y) || keyAt(nx, ny) !== source) continue;
+          if (keyAt(nx, ny) !== source) continue;
           seen[next] = 1; queue[tail++] = next;
         }
       }
       remember(previousSelection);
       for (let i = 0; i < tail; i++) {
         const cell = queue[i], x = cell % W, y = Math.floor(cell / W);
-        const gx = x + layer.x, gy = y + layer.y;
-        if (forceErase || inkTransparent) setBit(gx, gy, false, forceErase && !paperTransparent);
+        if (forceErase || inkTransparent) setBit(x, y, false, forceErase && !paperTransparent);
         else {
-          setBit(gx, gy, true, true);
-          const index = attrIndex(x, y);
-          attrs[index] = paperTransparent
-            ? (attrs[index] & 0x38) | ink | (brightEnabled ? 64 : 0)
-            : activeAttr();
+          setBit(x, y, true, true);
+          const previous = getAttr(x, y);
+          setAttr(x, y, paperTransparent
+            ? (previous & 0x38) | ink | (brightEnabled ? 64 : 0) : activeAttr());
         }
       }
     }
@@ -1681,7 +1781,7 @@
       lineSession.pointer = { x: clientX, y: clientY };
       const { end, length, unit } = lineEndpoint(lineSession.start, raw, shifted);
       const layer = layers[index];
-      const previewLayer = { ...layer, bitmap: layer.bitmap.slice(), attrs: layer.attrs.slice(), mask: layer.mask.slice() };
+      const previewLayer = cloneLayer(layer);
       withLayer(index, previewLayer, () => {
         if (attrMode) paintAttributeShape('line', lineSession.start, end);
         else paintShape('line', lineSession.start, end, lineSession.on);
@@ -1725,7 +1825,7 @@
       const end = rectangleSession.action === 'ellipse'
         ? ellipseEndpoint(rectangleSession.start, raw, shifted, rectangleSession.attrMode) : raw;
       const layer = layers[index];
-      const previewLayer = { ...layer, bitmap: layer.bitmap.slice(), attrs: layer.attrs.slice(), mask: layer.mask.slice() };
+      const previewLayer = cloneLayer(layer);
       withLayer(index, previewLayer, () => {
         if (rectangleSession.attrMode) paintAttributeShape(rectangleSession.action, rectangleSession.start, end);
         else paintShape(rectangleSession.action, rectangleSession.start, end, rectangleSession.on);
@@ -1781,19 +1881,18 @@
       if (!value) return;
       remember();
       const originalIndex = activeLayer, targetIndex = layers.indexOf(p.layer);
-      if (targetIndex >= 0) { activeLayer = targetIndex; bindActive(); }
+      if (targetIndex >= 0) activeLayer = targetIndex;
       try {
         for (let n = 0; n < value.length; n++) {
           const code = value.charCodeAt(n);
           if (code < 32 || code > 127) continue;
           for (let row = 0; row < 8; row++) for (let col = 0; col < 8; col++) {
             const x = p.x + n * 8 + col, y = p.y + row;
-            if (!inside(x, y)) continue;
             const on = !!(font[(code - 32) * 8 + row] & (128 >> col));
             setBit(x, y, on); setAttr(x, y, activeAttr());
           }
         }
-      } finally { activeLayer = originalIndex; bindActive(); }
+      } finally { activeLayer = originalIndex; }
       render();
     }
     function previewText() {
@@ -2311,6 +2410,12 @@
           `bitmap_base64 = "${base64(layer.bitmap)}"`,
           `attrs_base64 = "${base64(layer.attrs)}"`,
           `mask_base64 = "${base64(layer.mask)}"`);
+        for (const [key, cell] of layer.extra || []) {
+          const [cellX, cellY] = key.split(',').map(Number);
+          lines.push('', '[[layer.extra]]', `cell_x = ${cellX}`, `cell_y = ${cellY}`,
+            `bitmap_base64 = "${base64(cell.bitmap)}"`, `mask_base64 = "${base64(cell.mask)}"`,
+            `attr = ${cell.attr}`);
+        }
       }
       for (const reference of references) {
         lines.push('', '[[reference]]', `name = ${JSON.stringify(reference.name)}`,
@@ -2329,6 +2434,11 @@
         if (!line || line.startsWith('#')) continue;
         if (line === '[[layer]]') {
           current = {}; parsed.layers.push(current); continue;
+        }
+        if (line === '[[layer.extra]]') {
+          const layer = parsed.layers.at(-1);
+          if (!layer) throw new Error(tr('Unrecognized project line'));
+          current = {}; (layer.extra ||= []).push(current); continue;
         }
         if (line === '[[reference]]') {
           current = {}; parsed.references.push(current); continue;
@@ -2374,8 +2484,19 @@
             }
           }
         } else mask = decodeBase64(item.mask_base64, 6144);
+        const extra = new Map();
+        for (const cell of item.extra || []) {
+          if (!Number.isInteger(cell.cell_x) || !Number.isInteger(cell.cell_y) ||
+              !Number.isInteger(cell.attr) || cell.attr < 0 || cell.attr > 127 ||
+              cell.cell_x >= 0 && cell.cell_x < 32 && cell.cell_y >= 0 && cell.cell_y < 24)
+            throw new Error(tr('Invalid layer properties'));
+          const key = `${cell.cell_x},${cell.cell_y}`;
+          if (extra.has(key)) throw new Error(tr('Invalid layer properties'));
+          extra.set(key, { bitmap: decodeBase64(cell.bitmap_base64, 8),
+            mask: decodeBase64(cell.mask_base64, 8), attr: cell.attr });
+        }
         return { name: item.name, visible: item.visible, solo: item.solo ?? false, x: item.x, y: item.y,
-          bitmap, attrs, mask };
+          bitmap, attrs, mask, extra };
       });
       const loadedReferences = parsed.references.map(item => {
         if (typeof item.name !== 'string' || typeof item.visible !== 'boolean' ||
@@ -2405,7 +2526,7 @@
       stopLineSession(); stopRectangleSession(); cancelText();
       setDocumentSize(MAX_W, MAX_H, true);
       layers = [{ name: file.name, visible: true, solo: false, x: 0, y: 0,
-        bitmap: bytes.slice(0, 6144), attrs: bytes.slice(6144), mask: new Uint8Array(6144).fill(0xff) }];
+        bitmap: bytes.slice(0, 6144), attrs: bytes.slice(6144), mask: new Uint8Array(6144).fill(0xff), extra: new Map() }];
       clearTimeout(traceUpdateTimer);
       tracePreview = null; traceDrag = null;
       references = []; selectedReference = -1; renderReferences(); renderReferenceList();
@@ -2413,7 +2534,7 @@
       traceSettings = { ...window.PIXIE_TRACE.defaults }; syncTraceControls();
       activeLayer = 0; backgroundCode = -1; zxPreview = true;
       zxPreviewControl.classList.add('active'); zxPreviewControl.setAttribute('aria-pressed', 'true');
-      bindActive(); updateBackgroundSwatches();
+      updateBackgroundSwatches();
       projectFileName = fileStem(file.name) + '.pixie'; exportFileName = file.name;
       undo.length = 0; redo.length = 0; selection = null; pendingMove = null;
       renderLayerList(); render(); note(tr('Imported SCR: {name}', { name: file.name }));
@@ -2475,7 +2596,7 @@
         zxPreviewControl.classList.toggle('active', zxPreview);
         zxPreviewControl.setAttribute('aria-pressed', String(zxPreview));
         setDocumentSize(project.width, project.height, true);
-        bindActive(); updateBackgroundSwatches();
+        updateBackgroundSwatches();
         projectFileName = file.name; exportFileName = fileStem(file.name) + '.scr';
         undo.length = 0; redo.length = 0; selection = null; pendingMove = null;
         renderLayerList(); renderReferenceList(); renderReferences(); render();
