@@ -34,7 +34,7 @@ Pixie lets you draw at individual pixel resolution while seeing how the result w
 - **ZX attribute preview.** When rendering the visible layers together, encode their composition using ZX screen attributes. Each layer itself always keeps attributes per 8×8 cell; switching the preview does not change that. PNG export follows the preview, while SCR export always uses ZX encoding.
 - **Grid.** Show 8×8 cell boundaries and, at high zoom, individual pixel boundaries.
 - **Zoom and pan.** Pinch to zoom, scroll to pan, or use keyboard zoom presets from 1× to 9×.
-- **Undo and redo.** Revert drawing, layer changes, and selections.
+- **Undo and redo.** Revert drawing, layer changes, and selections. During an unfinished drag or shape preview, Undo cancels that action first.
 
 ## Files
 

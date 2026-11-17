@@ -1896,6 +1896,28 @@
       stopRectangleSession();
       return false;
     }
+    function cancelDrawingGesture() {
+      if (lineSession || rectangleSession) {
+        const pointerId = shapePress?.pointerId;
+        if (lineSession) stopLineSession();
+        else stopRectangleSession();
+        if (pointerId != null && screen.hasPointerCapture(pointerId)) screen.releasePointerCapture(pointerId);
+        return true;
+      }
+      if (!drag) return false;
+      const current = drag;
+      drag = null;
+      if (screen.hasPointerCapture(current.pointerId)) screen.releasePointerCapture(current.pointerId);
+      hideShapeMeasure();
+      if (current.action === 'draw' || current.action === 'move-layer' || current.finalizedPending) {
+        restore(undo, redo);
+        redo.pop();
+      } else {
+        selection = current.action === 'move' ? current.source : current.previousSelection;
+        render(); updateCanvasCursor();
+      }
+      return true;
+    }
     function previewSelection(end, snap, clientX, clientY) {
       drag.raw = end;
       drag.pointer = { x: clientX, y: clientY };
@@ -2103,7 +2125,8 @@
       if (drawingTools.has(tool) && !finalizedPending) remember(previousSelection);
       if (tool === 'move-layer' && !finalizedPending) remember(previousSelection);
       drag = { start: p, last: p, action: tool === 'select' && contains(selection, p) ? 'move' : tool,
-        attrMode: attrMode && drawingTools.has(tool) && !forceErase, previousSelection, finalizedPending };
+        attrMode: attrMode && drawingTools.has(tool) && !forceErase, previousSelection, finalizedPending,
+        pointerId: event.pointerId };
       if (tool === 'draw' && !drag.attrMode) drag.on = !forceErase && (inkTransparent || !bit(p.x, p.y));
       if (tool === 'move-layer') drag.origin = { x: active().x, y: active().y };
       if (drag.action === 'move') {
@@ -2293,7 +2316,8 @@
       setTool('select'); render();
       note(tr('Floating paste at its original position. Drag it or deselect to apply.'));
     };
-    document.querySelector('#undo').onclick = () => tracePreview ? undoTrace() : restore(undo, redo);
+    document.querySelector('#undo').onclick = () => tracePreview ? undoTrace()
+      : cancelDrawingGesture() || restore(undo, redo);
     document.querySelector('#redo').onclick = () => tracePreview ? redoTrace() : restore(redo, undo);
     document.querySelector('#swap').onclick = () => {
       [ink, paper] = [paper, ink];
@@ -2690,7 +2714,11 @@
           event.preventDefault(); if (event.shiftKey) redoTrace(); else undoTrace(); return;
         }
         if (typing) return;
-        if (code === 'KeyZ') { event.preventDefault(); restore(event.shiftKey ? redo : undo, event.shiftKey ? undo : redo); }
+        if (code === 'KeyZ') {
+          event.preventDefault();
+          if (!event.shiftKey && cancelDrawingGesture()) return;
+          restore(event.shiftKey ? redo : undo, event.shiftKey ? undo : redo);
+        }
         if (code === 'KeyC' && selection) { event.preventDefault(); document.querySelector('#copy').click(); }
         if (code === 'KeyX' && selection) { event.preventDefault(); document.querySelector('#cut').click(); }
         if (code === 'KeyV') { event.preventDefault(); document.querySelector('#paste').click(); }
@@ -2700,8 +2728,7 @@
         event.preventDefault(); applyTrace(); return;
       }
       if (event.key === 'Escape') {
-        if (lineSession) { event.preventDefault(); stopLineSession(); return; }
-        if (rectangleSession) { event.preventDefault(); stopRectangleSession(); return; }
+        if (cancelDrawingGesture()) { event.preventDefault(); return; }
         if (tracePreview) { event.preventDefault(); cancelTrace(); return; }
         if (selectedReference >= 0) {
           event.preventDefault(); selectedReference = -1; renderReferenceList(); return;
