@@ -246,13 +246,7 @@
         if (!!data.bits[i] === (kind === 'ink')) data.opacity[i] = index === 8 ? 0 : 1;
       }
     }
-    const copyPixels = data => ({ ...data, bits: data.bits.slice(),
-      colors: data.colors.slice(), opacity: data.opacity.slice() });
-    const copyMove = move => move ? {
-      source: move.source ? { ...move.source } : null, target: { ...move.target },
-      sourceLayer: move.sourceLayer, targetLayer: move.targetLayer,
-      data: copyPixels(move.data), scaleSource: move.scaleSource ? copyPixels(move.scaleSource) : null,
-    } : null;
+    const { copyPixels, copyMove } = window.PIXIE_SELECTION;
     function snapshot() {
       const tracing = tracePreview?.move === pendingMove;
       return { activeLayer, projectFileName, exportFileName, projectHandle, projectDocumentId,
@@ -1123,27 +1117,9 @@
     function resizedSelection(bounds, handle, dx, dy, snap) {
       return window.PIXIE_GEOMETRY.resizedSelection(bounds, handle, dx, dy, snap, W, H);
     }
-    function capture(s) {
-      const bits = new Uint8Array(s.w * s.h), colors = new Uint8Array(bits.length), opacity = new Uint8Array(bits.length);
-      for (let y = 0; y < s.h; y++) for (let x = 0; x < s.w; x++) {
-        const i = y * s.w + x, sx = s.x + x, sy = s.y + y;
-        bits[i] = bit(sx, sy) ? 1 : 0; colors[i] = getAttr(sx, sy);
-        const lx = sx - active().x, ly = sy - active().y;
-        opacity[i] = layerOpaque(active(), lx, ly) ? 1 : 0;
-      }
-      return { x: s.x, y: s.y, w: s.w, h: s.h, bits, colors, opacity };
-    }
-    function clear(s) {
-      for (let y = s.y; y < s.y + s.h; y++) for (let x = s.x; x < s.x + s.w; x++) setBit(x, y, false, false);
-    }
-    function stamp(data, x0, y0) {
-      for (let y = 0; y < data.h; y++) for (let x = 0; x < data.w; x++) {
-        const dx = x0 + x, dy = y0 + y;
-        const i = y * data.w + x;
-        if (!data.opacity[i]) continue;
-        setBit(dx, dy, !!data.bits[i], true); setAttr(dx, dy, data.colors[i]);
-      }
-    }
+    const capture = selection => window.PIXIE_SELECTION.capture(selection, active(), activeAttr());
+    const clear = selection => window.PIXIE_SELECTION.clear(selection, active());
+    const stamp = (data, x, y) => window.PIXIE_SELECTION.stamp(data, x, y, active());
     function withLayer(index, layer, action) {
       const originalIndex = activeLayer, originalLayer = editingLayer;
       activeLayer = index; editingLayer = layer;
