@@ -53,53 +53,18 @@
     let ink = 7, paper = 0, inkTransparent = false, paperTransparent = true;
     let brightEnabled = true, gridEnabled = false, zxPreview = true, backgroundCode = 0;
     const backgroundSwatches = document.querySelector('#background-swatches');
-    function updateBackgroundSwatches() {
-      for (const button of backgroundSwatches.children) {
-        const index = Number(button.dataset.color);
-        const selected = index === 8 ? backgroundCode === -1
-          : backgroundCode === index || backgroundCode === index + 8;
-        button.classList.toggle('active', selected);
-        button.setAttribute('aria-pressed', String(selected));
-        button.style.backgroundColor = index === 8 ? '' : selected && backgroundCode >= 0
-          ? (backgroundCode > 8 ? bright[backgroundCode - 8] : normal[backgroundCode])
-          : (brightEnabled ? bright : normal)[index];
-      }
-      referenceLayer.style.backgroundColor = backgroundCode < 0 ? 'transparent'
-        : (backgroundCode >= 8 ? bright[backgroundCode - 8] : normal[backgroundCode]);
-    }
-    for (let i = 0; i < 9; i++) {
-      const button = document.createElement('button');
-      button.type = 'button'; button.className = 'swatch' + (i === 8 ? ' transparent' : '');
-      button.dataset.color = String(i);
-      const label = i === 8 ? tr('Transparent (black in SCR)') : colors[i];
-      button.title = `${tr('Background')}: ${label}`;
-      button.setAttribute('aria-label', `${tr('Background')}: ${label}`);
-      button.onclick = () => {
-        const next = i === 8 ? -1 : brightEnabled && i ? i + 8 : i;
+    const { updateBackgroundSwatches, updateSwatches } = window.PIXIE_PALETTE.bind({
+      backgroundSwatches, inkSwatches, paperSwatches, referenceLayer, strokeIndicator, strokeIndicatorSlot,
+      normal, bright, colors, tr,
+      getState: () => ({ ink, paper, inkTransparent, paperTransparent, brightEnabled, backgroundCode }),
+      chooseColor: (kind, index) => chooseColor(kind, index),
+      chooseBackground: index => {
+        const next = index === 8 ? -1 : brightEnabled && index ? index + 8 : index;
         if (next === backgroundCode) return;
         remember(); backgroundCode = next; updateBackgroundSwatches();
         if (tracePreview) updateFloatingTrace(); else render();
-      };
-      backgroundSwatches.appendChild(button);
-    }
-    updateBackgroundSwatches();
-    function updateSwatches() {
-      for (const [kind, group] of [['ink', inkSwatches], ['paper', paperSwatches]]) {
-        for (const button of group.children) {
-          const index = Number(button.dataset.color);
-          const selected = index === 8 ? (kind === 'ink' ? inkTransparent : paperTransparent)
-            : !(kind === 'ink' ? inkTransparent : paperTransparent) && index === (kind === 'ink' ? ink : paper);
-          button.style.backgroundColor = index === 8 ? '' : (brightEnabled ? bright : normal)[index];
-          button.classList.toggle('active', selected);
-          button.setAttribute('aria-pressed', String(selected));
-        }
-      }
-      strokeIndicator.classList.toggle('transparent', inkTransparent);
-      strokeIndicator.style.backgroundColor = inkTransparent ? '' : (brightEnabled ? bright : normal)[ink];
-      strokeIndicatorSlot.classList.toggle('transparent', paperTransparent);
-      strokeIndicatorSlot.style.backgroundColor = paperTransparent ? '' : (brightEnabled ? bright : normal)[paper];
-      strokeIndicatorSlot.style.borderColor = paperTransparent ? '' : (brightEnabled ? bright : normal)[paper];
-    }
+      },
+    });
     function chooseColor(kind, index) {
       if (kind === 'ink') { inkTransparent = index === 8; if (index < 8) ink = index; }
       else { paperTransparent = index === 8; if (index < 8) paper = index; }
@@ -108,18 +73,6 @@
       previewText();
       refreshPolyline(); refreshRectangle();
     }
-    for (let i = 0; i < 9; i++) {
-      for (const [kind, group] of [['ink', inkSwatches], ['paper', paperSwatches]]) {
-        const button = document.createElement('button');
-        button.type = 'button'; button.className = 'swatch' + (i === 8 ? ' transparent' : ''); button.dataset.color = String(i);
-        const label = i === 8 ? tr('Transparent') : colors[i];
-        button.title = `${kind.toUpperCase()}: ${label} (${i === 8 ? (kind === 'ink' ? '0' : '⇧0') : (kind === 'ink' ? '' : '⇧') + (i + 1)})`;
-        button.setAttribute('aria-label', `${kind.toUpperCase()}: ${label}`);
-        button.onclick = () => chooseColor(kind, i);
-        group.appendChild(button);
-      }
-    }
-    updateSwatches();
     let tool = 'draw', attrMode = false, zoom = 6, selection = null, drag = null, clipboard = null;
     let lineSession = null, rectangleSession = null, shapePress = null;
     let pendingMove = null;
