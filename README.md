@@ -15,14 +15,15 @@ Pixie lets you draw at individual pixel resolution while seeing how the result w
 
 - **Canvas.** Create a full 256×192 ZX screen or a smaller document.
 - **Pixel brush.** Click an empty pixel to draw or a filled pixel to erase; dragging continues the action chosen by the first pixel.
-- **Right-button eraser.** Right-click or right-drag to force erasing with the brush, rectangles, or ellipse. The polyline tool does not use the right button.
+- **Right-button eraser.** Right-click or right-drag to force erasing with the brush, rectangles, or ellipse. Right-click with the fill tool erases a connected area. The polyline tool does not use the right button.
 - **Polylines.** Click successive points to draw connected segments, or drag for a single segment. Hold Shift for horizontal, vertical, or 45° lines; press Escape to end the polyline.
 - **Rectangles.** Draw an outline or a filled rectangle with two clicks or one drag. The size is shown beside the pointer while drawing.
 - **Ellipses.** Draw an outline with two clicks or one drag; hold Shift for a circle. The selected brush width applies to the outline.
+- **Flood fill.** Fill a connected region of the active layer, using its pixel colors and transparency as boundaries.
 - **Brush size.** Use a shared 1–8 pixel width for the drawing tools.
 - **Text.** Type directly on the canvas using the ZX ROM font. Hold Shift when placing text to align its start to an 8×8 cell.
 - **INK and PAPER.** Choose colors from swatches and switch BRIGHT on or off.
-- **Attribute painting.** Apply the brush, line, rectangle, or ellipse tools to whole 8×8 attribute cells without changing the selected tool.
+- **Attribute painting.** Apply the brush, line, rectangle, ellipse, or fill tools to whole 8×8 attribute cells without changing the selected tool.
 - **Transparency.** Use transparent INK or PAPER and per-pixel layer masks to reveal artwork below.
 - **Layers.** Show, hide, rename, move, reorder, and merge layers.
 - **Selections.** Copy, cut, erase, and move a selected region. Pasted artwork stays floating until the selection is dismissed.
@@ -49,7 +50,7 @@ The ZX Spectrum can store only one INK/PAPER color pair and one BRIGHT setting p
 
 | Shortcut | Action |
 | --- | --- |
-| `B`, `D`, `R`, `F`, `E`, `S`, `M`, `T` | Brush, polyline, rectangle, filled rectangle, ellipse, selection, move layer, text |
+| `B`, `D`, `R`, `F`, `E`, `P`, `S`, `M`, `T` | Brush, polyline, rectangle, filled rectangle, ellipse, fill, selection, move layer, text |
 | `A`, `Z`, `G` | Attribute painting, ZX preview, grid |
 | `Alt+1`…`Alt+9`, `Alt+0` | Set zoom; fit the canvas |
 | `L`, `Shift+L`, `Shift+M` | Add layer, delete layer, merge with layer below |

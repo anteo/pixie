@@ -51,6 +51,7 @@
         '[data-tool="rect"]': ['Rectangle (R): two clicks or drag; right button erases', 'Rectangle'],
         '[data-tool="fill-rect"]': ['Filled rectangle (F): two clicks or drag; right button erases', 'Filled rectangle'],
         '[data-tool="ellipse"]': ['Ellipse (E): two clicks or drag; Shift makes a circle; right button erases', 'Ellipse'],
+        '[data-tool="fill"]': ['Fill connected area (P); right button erases', 'Fill'],
         '[data-tool="select"]': ['Select area (S); Shift snaps to 8×8 cells', 'Select'],
         '[data-tool="move-layer"]': ['Move layer (M; arrows move 1 pixel, Shift+arrows move 8)', 'Move layer'],
         '#attr-mode': ['Draw 8×8 cell attributes (A)', 'Draw cell attributes'],
@@ -220,7 +221,7 @@
       strokePresets.appendChild(button);
     });
     setStrokeWidth(1);
-    const drawingTools = new Set(['draw', 'line', 'rect', 'fill-rect', 'ellipse']);
+    const drawingTools = new Set(['draw', 'line', 'rect', 'fill-rect', 'ellipse', 'fill']);
     const undo = [], redo = [];
     const note = message => { status.textContent = message; };
     const inside = (x, y) => x >= 0 && x < W && y >= 0 && y < H;
@@ -792,6 +793,7 @@
         rect: 'Draw an outlined rectangle with two clicks or a drag.',
         'fill-rect': 'Draw a filled rectangle with two clicks or a drag.',
         ellipse: 'Draw an ellipse with two clicks or a drag; Shift makes a circle.',
+        fill: 'Fill a connected area on the active layer.',
         select: 'Select an area; Shift snaps the outline to 8×8 cells.',
         'move-layer': 'Drag the canvas to move the active layer.',
         text: 'Click the canvas and type. Enter commits; Escape cancels.',
@@ -980,6 +982,72 @@
         cellLine({ x: right, y: top }, { x: right, y: bottom });
         cellLine({ x: right, y: bottom }, { x: left, y: bottom });
         cellLine({ x: left, y: bottom }, { x: left, y: top });
+      }
+    }
+    function fillArea(point, forceErase, previousSelection) {
+      const layer = active();
+      const sx = point.x - layer.x, sy = point.y - layer.y;
+      if (!inside(sx, sy)) return;
+      if (attrMode && !forceErase) {
+        const columns = Math.ceil(W / 8), rows = Math.ceil(H / 8);
+        const seen = new Uint8Array(columns * rows), queue = new Int32Array(columns * rows);
+        const startX = sx >> 3, startY = sy >> 3;
+        const source = attrs[attrIndex(sx, sy)];
+        let head = 0, tail = 0;
+        queue[tail++] = startY * columns + startX;
+        seen[startY * columns + startX] = 1;
+        while (head < tail) {
+          const cell = queue[head++], x = cell % columns, y = Math.floor(cell / columns);
+          for (const next of [x > 0 ? cell - 1 : -1, x + 1 < columns ? cell + 1 : -1,
+            y > 0 ? cell - columns : -1, y + 1 < rows ? cell + columns : -1]) {
+            if (next < 0 || seen[next]) continue;
+            const nx = next % columns, ny = Math.floor(next / columns);
+            if (layer.x + nx * 8 >= W || layer.y + ny * 8 >= H ||
+                layer.x + (nx + 1) * 8 <= 0 || layer.y + (ny + 1) * 8 <= 0 ||
+                attrs[attrIndex(nx * 8, ny * 8)] !== source) continue;
+            seen[next] = 1; queue[tail++] = next;
+          }
+        }
+        remember(previousSelection);
+        for (let i = 0; i < tail; i++) {
+          const cell = queue[i], x = cell % columns, y = Math.floor(cell / columns);
+          paintAttrCell(layer.x + x * 8, layer.y + y * 8);
+        }
+        return;
+      }
+      const keyAt = (x, y) => {
+        const index = offset(x, y), bitMask = 128 >> (x & 7);
+        if (!(mask[index] & bitMask)) return -1;
+        const value = attrs[attrIndex(x, y)], color = bitmap[index] & bitMask ? value & 7 : value >> 3 & 7;
+        return color && value & 64 ? color + 8 : color;
+      };
+      const source = keyAt(sx, sy);
+      const seen = new Uint8Array(W * H), queue = new Int32Array(W * H);
+      let head = 0, tail = 0;
+      queue[tail++] = sy * W + sx;
+      seen[sy * W + sx] = 1;
+      while (head < tail) {
+        const cell = queue[head++], x = cell % W, y = Math.floor(cell / W);
+        for (const next of [x > 0 ? cell - 1 : -1, x + 1 < W ? cell + 1 : -1,
+          y > 0 ? cell - W : -1, y + 1 < H ? cell + W : -1]) {
+          if (next < 0 || seen[next]) continue;
+          const nx = next % W, ny = Math.floor(next / W);
+          if (!inside(nx + layer.x, ny + layer.y) || keyAt(nx, ny) !== source) continue;
+          seen[next] = 1; queue[tail++] = next;
+        }
+      }
+      remember(previousSelection);
+      for (let i = 0; i < tail; i++) {
+        const cell = queue[i], x = cell % W, y = Math.floor(cell / W);
+        const gx = x + layer.x, gy = y + layer.y;
+        if (forceErase || inkTransparent) setBit(gx, gy, false, forceErase && !paperTransparent);
+        else {
+          setBit(gx, gy, true, true);
+          const index = attrIndex(x, y);
+          attrs[index] = paperTransparent
+            ? (attrs[index] & 0x38) | ink | (brightEnabled ? 64 : 0)
+            : activeAttr();
+        }
       }
     }
     const shapeMeasure = document.querySelector('#shape-measure');
@@ -1227,11 +1295,11 @@
       if (dx * dx + dy * dy >= 9) shapePress.moved = true;
     }
     screen.addEventListener('contextmenu', event => {
-      if (tool === 'draw' || tool === 'rect' || tool === 'fill-rect' || tool === 'ellipse') event.preventDefault();
+      if (tool === 'draw' || tool === 'rect' || tool === 'fill-rect' || tool === 'ellipse' || tool === 'fill') event.preventDefault();
     });
     screen.addEventListener('pointerdown', event => {
       if (shapePress) return;
-      const forceErase = event.button === 2 && (tool === 'draw' || tool === 'rect' || tool === 'fill-rect' || tool === 'ellipse');
+      const forceErase = event.button === 2 && (tool === 'draw' || tool === 'rect' || tool === 'fill-rect' || tool === 'ellipse' || tool === 'fill');
       if (event.button !== 0 && !forceErase) return;
       const p = point(event); if (!inside(p.x, p.y)) return;
       if (forceErase) event.preventDefault();
@@ -1260,6 +1328,12 @@
         if (previousSelection && !finalizedPending) remember(previousSelection);
         event.preventDefault();
         if (clickRectangle(p, forceErase, event.shiftKey || shiftHeld, event.clientX, event.clientY)) beginShapePress('rectangle', event);
+        return;
+      }
+      if (tool === 'fill') {
+        event.preventDefault();
+        fillArea(p, forceErase, finalizedPending ? null : previousSelection);
+        render();
         return;
       }
       if (drawingTools.has(tool) && !finalizedPending) remember(previousSelection);
@@ -1795,7 +1869,7 @@
       }
       const shortcuts = {
         KeyB: () => setTool('draw'), KeyD: () => setTool('line'), KeyR: () => setTool('rect'), KeyF: () => setTool('fill-rect'),
-        KeyE: () => setTool('ellipse'), KeyS: () => setTool('select'),
+        KeyE: () => setTool('ellipse'), KeyP: () => setTool('fill'), KeyS: () => setTool('select'),
         KeyM: () => setTool('move-layer'), KeyA: () => attrModeButton.click(), KeyT: () => setTool('text'),
         KeyN: newDocument,
         KeyI: () => document.querySelector('#swap').click(),
