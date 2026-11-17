@@ -1,6 +1,6 @@
 window.PIXIE_COMPOSITE = (() => {
   const MAX_W = 256, MAX_H = 192;
-  const { offset, attrIndex, layerBit, layerOpaque, layerAttr } = window.PIXIE_LAYER;
+  const { offset, attrIndex, layerBit, layerOpaque, layerAttr, extraKey, writeLayerAttr, writeLayerBit } = window.PIXIE_LAYER;
   function layerForPreview(index, previews, sourceLayers) {
     return previews?.get(index) || sourceLayers[index];
   }
@@ -106,5 +106,73 @@ window.PIXIE_COMPOSITE = (() => {
     }
     return result;
   }
-  return { layerForPreview, compositePixels, flatten };
+  function forEachOpaquePixel(layer, visit) {
+    for (let y = 0; y < MAX_H; y++) for (let x = 0; x < MAX_W; x++) {
+      if (layerOpaque(layer, x, y)) visit(x + layer.x, y + layer.y, layer, x, y);
+    }
+    for (const [key, cell] of layer.extra || []) {
+      const [cellX, cellY] = key.split(',').map(Number);
+      for (let row = 0; row < 8; row++) for (let col = 0; col < 8; col++) {
+        if (!(cell.mask[row] & (128 >> col))) continue;
+        const x = cellX * 8 + col, y = cellY * 8 + row;
+        visit(x + layer.x, y + layer.y, layer, x, y);
+      }
+    }
+  }
+  function mergeOffscreenPixels(merged, pair, W, H, colorDistance) {
+    const inside = (x, y) => x >= 0 && x < W && y >= 0 && y < H;
+    const cells = new Map();
+    for (const [order, layer] of pair.entries()) {
+      forEachOpaquePixel(layer, (x, y, source, sx, sy) => {
+        if (inside(x, y)) return;
+        const key = extraKey(x, y);
+        if (!cells.has(key)) cells.set(key, []);
+        const attr = layerAttr(source, sx, sy);
+        const color = layerBit(source, sx, sy) ? attr & 7 : attr >> 3 & 7;
+        cells.get(key).push({ x, y, color: attr & 64 && color ? color + 8 : color, weight: order ? 4 : 1 });
+      });
+    }
+    for (const [key, outside] of cells) {
+      const [cellX, cellY] = key.split(',').map(Number);
+      const x0 = cellX * 8, y0 = cellY * 8;
+      const colors = new Int8Array(64).fill(-1), weights = new Uint8Array(64);
+      for (let row = 0; row < 8; row++) for (let col = 0; col < 8; col++) {
+        const x = x0 + col, y = y0 + row;
+        if (!inside(x, y) || !layerOpaque(merged, x, y)) continue;
+        const attr = layerAttr(merged, x, y);
+        const color = layerBit(merged, x, y) ? attr & 7 : attr >> 3 & 7;
+        const index = row * 8 + col;
+        colors[index] = attr & 64 && color ? color + 8 : color;
+        weights[index] = 4;
+      }
+      for (const pixel of outside) {
+        const index = (pixel.y - y0) * 8 + pixel.x - x0;
+        colors[index] = pixel.color; weights[index] = pixel.weight;
+      }
+      let bestScore = Infinity, bestInk = 0, bestPaper = 0, bestBright = 0;
+      for (let brightState = 0; brightState < 2; brightState++) {
+        for (let paper = 0; paper < 8; paper++) for (let ink = 0; ink < 8; ink++) {
+          const paperCode = brightState && paper ? paper + 8 : paper;
+          const inkCode = brightState && ink ? ink + 8 : ink;
+          let score = 0;
+          for (let i = 0; i < 64; i++) {
+            if (colors[i] < 0) continue;
+            score += weights[i] * Math.min(colorDistance[colors[i]][paperCode], colorDistance[colors[i]][inkCode]);
+          }
+          if (score < bestScore) {
+            bestScore = score; bestInk = ink; bestPaper = paper; bestBright = brightState;
+          }
+        }
+      }
+      writeLayerAttr(merged, x0, y0, bestInk | bestPaper << 3 | bestBright << 6);
+      const inkCode = bestBright && bestInk ? bestInk + 8 : bestInk;
+      const paperCode = bestBright && bestPaper ? bestPaper + 8 : bestPaper;
+      for (let i = 0; i < 64; i++) {
+        const x = x0 + i % 8, y = y0 + Math.floor(i / 8), opaque = colors[i] >= 0;
+        const on = opaque && colorDistance[colors[i]][inkCode] < colorDistance[colors[i]][paperCode];
+        writeLayerBit(merged, x, y, on, opaque);
+      }
+    }
+  }
+  return { layerForPreview, compositePixels, flatten, mergeOffscreenPixels };
 })();
