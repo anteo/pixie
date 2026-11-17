@@ -825,7 +825,7 @@
         ellipse: 'Ellipse: click twice or drag; Shift makes a circle.',
         fill: 'Fill a connected area.',
         select: 'Select, move, or resize; Shift snaps to 8×8 cells.',
-        'move-layer': 'Drag to move; Shift+arrows snap to cells.',
+        'move-layer': 'Drag to move; Shift snaps to 8×8 cells.',
         text: 'Click to type; Shift snaps, Enter floats text.',
       };
       note(tr(tips[name]));
@@ -835,6 +835,13 @@
       return { x: Math.floor((event.clientX - r.left) * W / r.width), y: Math.floor((event.clientY - r.top) * H / r.height) };
     };
     const clamp = (value, max) => Math.max(0, Math.min(max, value));
+    function moveDraggedLayer(p, snap) {
+      const x = drag.origin.x + p.x - drag.start.x;
+      const y = drag.origin.y + p.y - drag.start.y;
+      active().x = snap ? Math.round(x / 8) * 8 : x;
+      active().y = snap ? Math.round(y / 8) * 8 : y;
+      updateActiveLayerCoords();
+    }
     const { rectangle, cellPoint, connectedArea, walkLine, ellipseOutline, contains, sameSelection,
       scaleSelection, nudgeCoordinate } = window.PIXIE_GEOMETRY;
     function selectionRectangle(a, b, snap) {
@@ -1303,9 +1310,7 @@
         else line(drag.last, p, drag.on);
       }
       if (drag.action === 'move-layer') {
-        active().x = drag.origin.x + p.x - drag.start.x;
-        active().y = drag.origin.y + p.y - drag.start.y;
-        updateActiveLayerCoords();
+        moveDraggedLayer(p, event.shiftKey || shiftHeld);
       }
       if (drag.action === 'select') previewSelection(p, event.shiftKey || shiftHeld, event.clientX, event.clientY);
       else if (drag.action === 'move') previewMove(moveTarget(p));
@@ -1347,8 +1352,7 @@
       }
       if (drag.action === 'move-layer') {
         const raw = point(event), p = { x: clamp(raw.x, W - 1), y: clamp(raw.y, H - 1) };
-        active().x = drag.origin.x + p.x - drag.start.x;
-        active().y = drag.origin.y + p.y - drag.start.y;
+        moveDraggedLayer(p, event.shiftKey || shiftHeld);
         renderLayerList();
       }
       if (drag.action === 'select') {
@@ -1712,6 +1716,7 @@
         shiftHeld = true;
         refreshPolyline(); refreshRectangle(); refreshSelectionResize();
         if (drag?.action === 'select' && drag.raw && drag.pointer) previewSelection(drag.raw, true, drag.pointer.x, drag.pointer.y);
+        if (drag?.action === 'move-layer') { moveDraggedLayer(drag.last, true); render(); }
       }
     }, true);
     document.addEventListener('keyup', event => {
@@ -1719,6 +1724,7 @@
         shiftHeld = false;
         refreshPolyline(); refreshRectangle(); refreshSelectionResize();
         if (drag?.action === 'select' && drag.raw && drag.pointer) previewSelection(drag.raw, false, drag.pointer.x, drag.pointer.y);
+        if (drag?.action === 'move-layer') { moveDraggedLayer(drag.last, false); render(); }
       }
     }, true);
     window.addEventListener('blur', () => { shiftHeld = false; hideShapeMeasure(); });

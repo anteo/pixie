@@ -57,7 +57,7 @@ window.PIXIE_I18N = (() => {
       '[data-tool="ellipse"]': ['Ellipse (E): two clicks or drag; Shift makes a circle; right button erases', 'Ellipse'],
       '[data-tool="fill"]': ['Fill connected area (P); right button erases', 'Fill'],
       '[data-tool="select"]': ['Select area (S); drag its edges to resize, Shift snaps size to 8×8 cells', 'Select'],
-      '[data-tool="move-layer"]': ['Move layer (M; arrows move 1 pixel, Shift+arrows snap to the next 8×8 cell)', 'Move layer'],
+      '[data-tool="move-layer"]': ['Move layer (M; Shift+drag snaps to 8×8 cells)', 'Move layer'],
       '#attr-mode': ['Draw 8×8 cell attributes (A)', 'Draw cell attributes'],
       '[data-tool="text"]': ['Text: click the canvas and type; Shift snaps to a cell (T)', 'Text'],
       '#text-entry': [null, 'Text on canvas'],

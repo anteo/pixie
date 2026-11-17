@@ -66,6 +66,7 @@ The ZX Spectrum can store only one INK/PAPER color pair and one BRIGHT setting p
 | `A`, `Z`, `G` | Attribute painting, ZX preview, grid |
 | `K`, `Enter`, `Escape` | Start tracing the selected reference; apply or cancel the preview |
 | `Arrow keys`, `Shift+arrow keys` | Move a selection by 1 pixel or to the next 8×8 cell boundary; move the layer when the Move Layer tool is active; otherwise scroll the canvas (Shift scrolls faster) |
+| `Shift+drag` with Move Layer | Snap the layer offset to 8×8 cell boundaries |
 | `Enter` | Apply a floating selection and dismiss its outline |
 | `Alt+1`…`Alt+9`, `Alt+0` | Set zoom; fit the canvas |
 | `Alt+Shift+1`…`Alt+Shift+8` | Choose a 1–8 pixel brush size |
