@@ -25,7 +25,8 @@ Pixie lets you draw at individual pixel resolution while seeing how the result w
 - **INK and PAPER.** Choose colors from swatches and switch BRIGHT on or off.
 - **Attribute painting.** Apply the brush, line, rectangle, ellipse, or fill tools to whole 8×8 attribute cells without changing the selected tool.
 - **Transparency.** Use transparent INK or PAPER and per-pixel layer masks to reveal artwork below.
-- **Layers.** Show, hide, rename, move, reorder, and merge layers.
+- **Layers.** Show, hide, rename, move, reorder, and merge layers. The visibility button cycles **on → off → solo** and shows the letter S in solo state; `V` cycles the active layer. Several layers can be solo at once.
+- **Solo preview.** With ZX preview on, all enabled layers are rendered together with ZX attributes; that result is dimmed outside the solo layers. Solo pixels remain at full brightness and follow layer order, while other rows in the layer panel become translucent. With ZX preview off, the dimmed area uses normal layer compositing. Solo is a canvas preview; exports retain the normal visible-layer image.
 - **Selections.** Copy, cut, erase, and move a selected region. Pasted artwork stays floating until the selection is dismissed.
 - **ZX attribute preview.** When rendering the visible layers together, encode their composition using ZX screen attributes. Each layer itself always keeps attributes per 8×8 cell; switching the preview does not change that. PNG export follows the preview, while SCR export always uses ZX encoding.
 - **Grid.** Show 8×8 cell boundaries and, at high zoom, individual pixel boundaries.
@@ -36,7 +37,7 @@ Pixie lets you draw at individual pixel resolution while seeing how the result w
 
 | Format | Use |
 | --- | --- |
-| `.pixie` | Save and reopen the editable project: canvas size, layers, transparency, and preview setting. The file contents are TOML. |
+| `.pixie` | Save and reopen the editable project: canvas size, layers, transparency, solo state, and preview setting. The file contents are TOML. |
 | `.scr` | Import or export a standard 6,912-byte ZX Spectrum screen. Export requires a full 256×192 canvas. |
 | `.png` | Export the visible image, including transparency. The ZX preview switch determines whether colors are encoded to 8×8 attributes first. |
 

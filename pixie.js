@@ -83,7 +83,7 @@
     const attrIndex = (x, y) => (y >> 3) * 32 + (x >> 3);
     const font = Uint8Array.from(atob('AAAAAAAAAAAAEBAQEAAQAAAkJAAAAAAAACR+JCR+JAAACD4oPgo+CABiZAgQJkYAABAoECpEOgAACBAAAAAAAAAECAgICAQAACAQEBAQIAAAABQIPggUAAAACAg+CAgAAAAAAAAICBAAAAAAPgAAAAAAAAAAGBgAAAACBAgQIAAAPEZKUmI8AAAYKAgICD4AADxCAjxAfgAAPEIMAkI8AAAIGChIfggAAH5AfAJCPAAAPEB8QkI8AAB+AgQIEBAAADxCPEJCPAAAPEJCPgI8AAAAABAAABAAAAAQAAAQECAAAAQIEAgEAAAAAD4APgAAAAAQCAQIEAAAPEIECAAIAAA8SlZeQDwAADxCQn5CQgAAfEJ8QkJ8AAA8QkBAQjwAAHhEQkJEeAAAfkB8QEB+AAB+QHxAQEAAADxCQE5CPAAAQkJ+QkJCAAA+CAgICD4AAAICAkJCPAAAREhwSERCAABAQEBAQH4AAEJmWkJCQgAAQmJSSkZCAAA8QkJCQjwAAHxCQnxAQAAAPEJCUko8AAB8QkJ8REIAADxAPAJCPAAA/hAQEBAQAABCQkJCQjwAAEJCQkIkGAAAQkJCQlokAABCJBgYJEIAAIJEKBAQEAAAfgQIECB+AAAOCAgICA4AAABAIBAIBAAAcBAQEBBwAAAQOFQQEBAAAAAAAAAAAP8AHCJ4ICB+AAAAOAQ8RDwAACAgPCIiPAAAABwgICAcAAAEBDxERDwAAAA4RHhAPAAADBAYEBAQAAAAPEREPAQ4AEBAeERERAAAEAAwEBA4AAAEAAQEBCQYACAoMDAoJAAAEBAQEBAMAAAAaFRUVFQAAAB4RERERAAAADhEREQ4AAAAeEREeEBAAAA8REQ8BAYAABwgICAgAAAAOEA4BHgAABA4EBAQDAAAAEREREQ4AAAAREQoKBAAAABEVFRUKAAAAEQoEChEAAAAREREPAQ4AAB8CBAgfAAADggwCAgOAAAICAgICAgAAHAQDBAQcAAAFCgAAAAAADxCmaGhmUI8'), c => c.charCodeAt(0));
     function emptyLayer(name) {
-      return { name, visible: true, x: 0, y: 0,
+      return { name, visible: true, solo: false, x: 0, y: 0,
         bitmap: new Uint8Array(6144), attrs: new Uint8Array(768).fill(0x47),
         mask: new Uint8Array(6144) };
     }
@@ -109,10 +109,11 @@
     const colorDistance = paletteRgb.map(a => paletteRgb.map(b =>
       (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2));
     const cursorCoords = document.querySelector('#cursor-coords');
+    const cursorInfo = document.querySelector('#cursor-info');
     const cursorInk = document.querySelector('#cursor-ink'), cursorPaper = document.querySelector('#cursor-paper');
     const strokeIndicator = document.querySelector('#stroke-indicator');
     const strokeIndicatorSlot = document.querySelector('#stroke-indicator-slot');
-    let cursorPoint = null, displayedScr = null, displayedCoverage = null;
+    let cursorPoint = null, displayedScr = null, displayedCoverage = null, displayedSoloLayers = [];
     let ink = 7, paper = 0, inkTransparent = false, paperTransparent = true;
     let brightEnabled = true, gridEnabled = false, zxPreview = true, backgroundCode = 0;
     const backgroundSwatches = document.querySelector('#background-swatches');
@@ -312,7 +313,7 @@
     function snapshot() {
       return { activeLayer, projectFileName, exportFileName, backgroundCode, width: W, height: H,
         selection: selection ? { ...selection } : null, pendingMove: copyMove(pendingMove), layers: layers.map(layer => ({
-        name: layer.name, visible: layer.visible, x: layer.x, y: layer.y,
+        name: layer.name, visible: layer.visible, solo: !!layer.solo, x: layer.x, y: layer.y,
         bitmap: layer.bitmap.slice(), attrs: layer.attrs.slice(), mask: layer.mask.slice(),
       })) };
     }
@@ -447,9 +448,18 @@
     }
     function render(composite = null, outline = null, previews = null) {
       if (!previews && pendingMove) previews = pendingPreviewLayers();
+      const soloLayers = layers.map((layer, index) => layerForPreview(index, previews))
+        .filter(layer => layer.visible && layer.solo);
+      if (soloLayers.length) {
+        renderSolo(soloLayers, outline, previews);
+        return;
+      }
+      cursorInfo.title = tr('INK and PAPER after SCR encoding');
+      cursorInfo.setAttribute('aria-label', tr('SCR attributes under cursor'));
       if (!composite) composite = flatten(previews);
       const image = ctx.createImageData(W, H), pixels = image.data;
       displayedScr = composite;
+      displayedSoloLayers = [];
       const raw = !zxPreview || backgroundCode === -1 ? compositePixels(previews) : null;
       displayedCoverage = backgroundCode === -1 ? raw.coverage : null;
       for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
@@ -463,6 +473,52 @@
         const i = (y * W + x) * 4;
         pixels[i] = rgb[0]; pixels[i + 1] = rgb[1]; pixels[i + 2] = rgb[2];
         pixels[i + 3] = displayedCoverage && !displayedCoverage[y * W + x] ? 0 : 255;
+      }
+      ctx.putImageData(image, 0, 0); drawOverlay(outline); paintCursor();
+    }
+    function topSoloPixel(soloLayers, x, y) {
+      for (let index = soloLayers.length - 1; index >= 0; index--) {
+        const layer = soloLayers[index];
+        const sx = x - layer.x, sy = y - layer.y;
+        if (!inside(sx, sy)) continue;
+        const byte = offset(sx, sy), bitMask = 128 >> (sx & 7);
+        if (!(layer.mask[byte] & bitMask)) continue;
+        const attr = layer.attrs[attrIndex(sx, sy)];
+        const color = layer.bitmap[byte] & bitMask ? attr & 7 : (attr >> 3) & 7;
+        return { attr, color: attr & 64 && color ? color + 8 : color };
+      }
+      return null;
+    }
+    function renderSolo(soloLayers, outline, previews) {
+      cursorInfo.title = tr(zxPreview
+        ? 'Solo layers use their own attributes; dimmed pixels show ZX rendering'
+        : 'Solo layers use their own attributes; dimmed pixels show raw compositing');
+      cursorInfo.setAttribute('aria-label', tr('Attributes under cursor in solo preview'));
+      const scr = flatten(previews);
+      const raw = !zxPreview || backgroundCode === -1 ? compositePixels(previews) : null;
+      const coverage = backgroundCode === -1 ? raw.coverage : null;
+      const image = ctx.createImageData(W, H), pixels = image.data;
+      displayedScr = scr;
+      displayedCoverage = coverage;
+      displayedSoloLayers = soloLayers;
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+        const index = y * W + x, pixel = index * 4;
+        let color = raw ? raw.imageColors[y * MAX_W + x] : 0;
+        if (zxPreview) {
+          const attr = scr[6144 + attrIndex(x, y)];
+          const bitOn = !!(scr[offset(x, y)] & (128 >> (x & 7)));
+          const inkOrPaper = bitOn ? attr & 7 : (attr >> 3) & 7;
+          color = attr & 64 && inkOrPaper ? inkOrPaper + 8 : inkOrPaper;
+        }
+        let rgb = paletteRgb[color];
+        let alpha = coverage && !coverage[index] ? 0 : 255;
+        const soloPixel = topSoloPixel(soloLayers, x, y);
+        if (soloPixel) { rgb = paletteRgb[soloPixel.color]; alpha = 255; }
+        const dimmed = !soloPixel;
+        pixels[pixel] = dimmed ? Math.round(rgb[0] * 0.28) : rgb[0];
+        pixels[pixel + 1] = dimmed ? Math.round(rgb[1] * 0.28) : rgb[1];
+        pixels[pixel + 2] = dimmed ? Math.round(rgb[2] * 0.28) : rgb[2];
+        pixels[pixel + 3] = alpha;
       }
       ctx.putImageData(image, 0, 0); drawOverlay(outline); paintCursor();
     }
@@ -492,7 +548,9 @@
         return;
       }
       cursorInk.classList.remove('transparent'); cursorPaper.classList.remove('transparent');
-      const attr = displayedScr[6144 + attrIndex(x, y)];
+      let attr = displayedScr[6144 + attrIndex(x, y)];
+      const soloPixel = topSoloPixel(displayedSoloLayers, x, y);
+      if (soloPixel) attr = soloPixel.attr;
       const palette = attr & 64 ? bright : normal;
       const inkIndex = attr & 7, paperIndex = (attr >> 3) & 7;
       cursorInk.style.backgroundColor = palette[inkIndex];
@@ -577,14 +635,25 @@
       for (const row of layerList.children) row.classList.remove('dragging');
       clearLayerDropMarkers(layerList);
     });
+    function cycleLayerVisibility(layer) {
+      remember();
+      if (layer.solo) layer.solo = false;
+      else if (layer.visible) layer.visible = false;
+      else {
+        layer.visible = true; layer.solo = true;
+      }
+      renderLayerList(); render();
+    }
     function renderLayerList() {
       const list = layerList;
+      const hasSolo = layers.some(layer => layer.visible && layer.solo);
       list.replaceChildren();
       for (let index = layers.length - 1; index >= 0; index--) {
         const layer = layers[index];
         const row = document.createElement('div');
         row.dataset.index = String(index);
-        row.className = 'layer-row' + (index === activeLayer ? ' active' : '');
+        row.className = 'layer-row' + (index === activeLayer ? ' active' : '')
+          + (hasSolo && !layer.solo ? ' solo-muted' : '');
         row.title = tr('Select or drag layer; double-click its name to rename');
         row.onclick = () => {
           if (suppressLayerClick) return;
@@ -600,13 +669,17 @@
           render();
         };
         const eye = document.createElement('button');
+        const state = layer.solo ? 'Solo' : layer.visible ? 'On' : 'Off';
+        const next = layer.solo ? 'On' : layer.visible ? 'Off' : 'Solo';
         eye.type = 'button'; eye.className = 'layer-eye';
-        eye.title = tr('Show or hide layer (V toggles active layer)');
-        eye.setAttribute('aria-label', tr(layer.visible ? 'Hide layer' : 'Show layer'));
-        eye.innerHTML = `<svg class="icon"><use href="#i-eye${layer.visible ? '' : '-off'}"/></svg>`;
+        eye.title = tr('Layer state: {state}; click for {next} (V for active layer)',
+          { state: tr(state), next: tr(next) });
+        eye.setAttribute('aria-label', eye.title);
+        eye.setAttribute('aria-pressed', layer.solo ? 'mixed' : String(layer.visible));
+        eye.innerHTML = layer.solo ? '<span class="solo-mark" aria-hidden="true">S</span>'
+          : `<svg class="icon"><use href="#i-eye${layer.visible ? '' : '-off'}"/></svg>`;
         eye.onclick = event => {
-          event.stopPropagation(); remember(); layer.visible = !layer.visible;
-          renderLayerList(); render();
+          event.stopPropagation(); cycleLayerVisibility(layer);
         };
         const name = document.createElement('span');
         name.className = 'layer-name'; name.textContent = layer.name;
@@ -685,7 +758,7 @@
       for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
         if (coverage[y * W + x]) mergedMask[offset(x, y)] |= 128 >> (x & 7);
       }
-      layers[lowerIndex] = { name: pair[0].name, visible: true, x: 0, y: 0,
+      layers[lowerIndex] = { name: pair[0].name, visible: true, solo: pair.some(layer => layer.solo), x: 0, y: 0,
         bitmap: encoded.slice(0, 6144), attrs: encoded.slice(6144), mask: mergedMask };
       layers.splice(activeLayer, 1);
       activeLayer = lowerIndex; bindActive();
@@ -1649,7 +1722,7 @@
       const projectLayers = layers.map((layer, index) => layerForPreview(index, previews));
       for (const layer of projectLayers) {
         lines.push('', '[[layer]]', `name = ${JSON.stringify(layer.name)}`,
-          `visible = ${layer.visible}`, `x = ${layer.x}`, `y = ${layer.y}`,
+          `visible = ${layer.visible}`, `solo = ${!!layer.solo}`, `x = ${layer.x}`, `y = ${layer.y}`,
           `bitmap_base64 = "${base64(layer.bitmap)}"`,
           `attrs_base64 = "${base64(layer.attrs)}"`,
           `mask_base64 = "${base64(layer.mask)}"`);
@@ -1687,6 +1760,8 @@
         throw new Error(tr('Invalid ZX preview setting'));
       const loaded = parsed.layers.map((item, index) => {
         if (typeof item.name !== 'string' || typeof item.visible !== 'boolean' ||
+            (item.solo !== undefined && typeof item.solo !== 'boolean') ||
+            (item.solo && !item.visible) ||
             !Number.isInteger(item.x) || !Number.isInteger(item.y)) {
           throw new Error(tr('Invalid layer properties'));
         }
@@ -1704,7 +1779,7 @@
             }
           }
         } else mask = decodeBase64(item.mask_base64, 6144);
-        return { name: item.name, visible: item.visible, x: item.x, y: item.y,
+        return { name: item.name, visible: item.visible, solo: item.solo ?? false, x: item.x, y: item.y,
           bitmap, attrs, mask };
       });
       return { layers: loaded, activeLayer: parsed.active, background, zxPreview: parsed.zx_preview, width, height };
@@ -1716,7 +1791,7 @@
       if (bytes.length !== 6912) { note(tr('A standard 6912-byte SCR file is required.')); return; }
       stopLineSession(); stopRectangleSession(); cancelText();
       setDocumentSize(MAX_W, MAX_H);
-      layers = [{ name: file.name, visible: true, x: 0, y: 0,
+      layers = [{ name: file.name, visible: true, solo: false, x: 0, y: 0,
         bitmap: bytes.slice(0, 6144), attrs: bytes.slice(6144), mask: new Uint8Array(6144).fill(0xff) }];
       activeLayer = 0; backgroundCode = -1; zxPreview = true;
       zxPreviewControl.classList.add('active'); zxPreviewControl.setAttribute('aria-pressed', 'true');
@@ -1875,7 +1950,7 @@
         KeyI: () => document.querySelector('#swap').click(),
         KeyH: () => brightControl.click(), KeyG: () => gridControl.click(),
         KeyZ: () => zxPreviewControl.click(),
-        KeyV: () => { remember(); active().visible = !active().visible; renderLayerList(); render(); },
+        KeyV: () => cycleLayerVisibility(active()),
       };
       if (code === 'KeyL') {
         event.preventDefault();
