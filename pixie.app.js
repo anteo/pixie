@@ -1765,6 +1765,14 @@
         active().y = nudgeCoordinate(active().y, dy, event.shiftKey);
         renderLayerList(); render(); return;
       }
+      if (directions[event.key]) {
+        event.preventDefault();
+        const [dx, dy] = directions[event.key];
+        const step = event.shiftKey ? 192 : 48;
+        viewport.scrollLeft += dx * step;
+        viewport.scrollTop += dy * step;
+        return;
+      }
       const digit = /^Digit([1-8])$/.exec(event.code);
       if (digit) {
         event.preventDefault();
