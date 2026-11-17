@@ -92,7 +92,6 @@ window.PIXIE_RU = Object.freeze({
   'Lower layer': 'Опустить слой',
   'Merge with layer below (Shift+M)': 'Слить со слоем ниже (Shift+M)',
   'Merge with layer below': 'Слить со слоем ниже',
-  'Delete layer (⇧L)': 'Удалить слой (⇧L)',
   'Delete layer': 'Удалить слой',
   'Background color': 'Фоновый цвет',
   'Brush size: 1×1 pixels': 'Размер кисти: 1×1 пиксель',

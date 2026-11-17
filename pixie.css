@@ -189,6 +189,8 @@
   .layer-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .layer-eye { width: 26px; height: 26px; padding: 4px; display: grid; place-items: center; }
   .layer-eye .icon { width: 17px; height: 17px; }
+  .layer-row .icon-button { width: 26px; height: 26px; padding: 4px; }
+  .layer-row .icon-button .icon { width: 16px; height: 16px; }
   .layer-eye .solo-mark { font: 700 15px/1 ui-monospace, monospace; }
   .layer-coords { flex: none; color: #aeb6c4; font: 11px ui-monospace, monospace; white-space: nowrap; }
   #references-panel { display: flex; flex-direction: column; gap: 8px; min-height: 0; margin-top: 8px; }

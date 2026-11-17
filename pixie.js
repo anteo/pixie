@@ -66,7 +66,6 @@
         '#layer-up': ['Raise layer (])', 'Raise layer'],
         '#layer-down': ['Lower layer ([)', 'Lower layer'],
         '#layer-merge': ['Merge with layer below (Shift+M)', 'Merge with layer below'],
-        '#layer-delete': ['Delete layer (⇧L)', 'Delete layer'],
         '#background-swatches': [null, 'Background color'],
         '#references-panel': [null, 'Reference images'],
         '#reference-add': ['Add reference image', 'Add reference image'],
@@ -707,19 +706,24 @@
         };
         const coords = document.createElement('span');
         coords.className = 'layer-coords';
-        coords.textContent = `x:${layer.x} y:${layer.y}`;
+        coords.textContent = `${layer.x}:${layer.y}`;
         coords.title = tr('Layer offset: x {x}, y {y}', { x: layer.x, y: layer.y });
-        row.append(eye, name, coords); list.appendChild(row);
+        const remove = document.createElement('button');
+        remove.type = 'button'; remove.className = 'icon-button';
+        remove.title = tr('Delete layer'); remove.setAttribute('aria-label', remove.title);
+        remove.disabled = layers.length === 1;
+        remove.innerHTML = '<svg class="icon"><use href="#i-trash"/></svg>';
+        remove.onclick = event => { event.stopPropagation(); deleteLayer(index); };
+        row.append(eye, name, coords, remove); list.appendChild(row);
       }
       document.querySelector('#layer-up').disabled = activeLayer === layers.length - 1;
       document.querySelector('#layer-down').disabled = activeLayer === 0;
       document.querySelector('#layer-merge').disabled = !canMergeDown();
-      document.querySelector('#layer-delete').disabled = layers.length === 1;
     }
     function updateActiveLayerCoords() {
       const coords = document.querySelector('#layer-list .layer-row.active .layer-coords');
       if (!coords) return;
-      coords.textContent = `x:${active().x} y:${active().y}`;
+      coords.textContent = `${active().x}:${active().y}`;
       coords.title = tr('Layer offset: x {x}, y {y}', { x: active().x, y: active().y });
     }
     function updateReferenceFrame() {
@@ -966,17 +970,20 @@
       }
       renderLayerList(); render();
     }
-    function deleteLayer() {
+    function deleteLayer(index = activeLayer) {
       if (layers.length === 1) return;
       stopLineSession(); stopRectangleSession();
-      const removed = active();
+      const removed = layers[index];
+      if (!removed) return;
+      const selected = active();
       const moveSource = pendingMove?.sourceLayer != null ? layers[pendingMove.sourceLayer] : null;
       const moveTarget = pendingMove ? layers[pendingMove.targetLayer] : null;
-      remember(); layers.splice(activeLayer, 1);
-      activeLayer = Math.min(activeLayer, layers.length - 1);
+      remember(); layers.splice(index, 1);
+      activeLayer = removed === selected ? Math.min(index, layers.length - 1) : layers.indexOf(selected);
       bindActive();
       if (pendingMove) {
-        pendingMove.sourceLayer = moveSource && moveSource !== removed ? layers.indexOf(moveSource) : null;
+        const sourceIndex = moveSource && moveSource !== removed ? layers.indexOf(moveSource) : -1;
+        pendingMove.sourceLayer = sourceIndex >= 0 ? sourceIndex : null;
         if (pendingMove.sourceLayer == null) pendingMove.source = null;
         pendingMove.targetLayer = moveTarget && moveTarget !== removed ? layers.indexOf(moveTarget) : activeLayer;
       }
@@ -1811,7 +1818,6 @@
     document.querySelector('#layer-up').onclick = () => moveLayerStack(1);
     document.querySelector('#layer-down').onclick = () => moveLayerStack(-1);
     document.querySelector('#layer-merge').onclick = mergeDown;
-    document.querySelector('#layer-delete').onclick = deleteLayer;
     function captureSelection() {
       if (!pendingMove) return capture(selection);
       const data = pendingMove.data;
