@@ -2052,7 +2052,7 @@
       context.font = face;
       return textLineMetrics(context, size).h;
     }
-    function rasterizeText(value) {
+    function rasterizeText(value, caretIndex = value.length) {
       if (!value) return null;
       if (isRomFont()) {
         const w = value.length * 8, h = 8, bits = new Uint8Array(w * h);
@@ -2062,7 +2062,7 @@
           for (let row = 0; row < 8; row++) for (let col = 0; col < 8; col++)
             bits[row * w + n * 8 + col] = !!(font[(code - 32) * 8 + row] & (128 >> col));
         }
-        return { w, h, bits, cursorX: w };
+        return { w, h, bits, cursorX: Math.min(caretIndex, value.length) * 8 };
       }
       const { size, face } = textFontSpec();
       const canvas = document.createElement('canvas');
@@ -2071,8 +2071,9 @@
       const metrics = context.measureText(value);
       const left = Math.ceil(Math.max(0, metrics.actualBoundingBoxLeft || 0)) + 1;
       const { ascent, h } = textLineMetrics(context, size);
-      const cursorX = Math.min(2047, left + Math.round(metrics.width));
-      const w = Math.min(2048, Math.max(cursorX + 1,
+      const textEndX = Math.min(2047, left + Math.round(metrics.width));
+      const cursorX = Math.min(2047, left + Math.round(context.measureText(value.slice(0, caretIndex)).width));
+      const w = Math.min(2048, Math.max(textEndX + 1,
         Math.ceil(left + Math.max(metrics.width, metrics.actualBoundingBoxRight || 0)) + 1));
       const scale = w * h < 50000 ? 4 : w * h < 150000 ? 3 : 2;
       canvas.width = w * scale; canvas.height = h * scale;
@@ -2092,8 +2093,8 @@
       }
       return { w, h, bits, cursorX };
     }
-    function textPixels(value) {
-      const mask = rasterizeText(value);
+    function textPixels(value, caretIndex = value.length) {
+      const mask = rasterizeText(value, caretIndex);
       if (!mask) return null;
       const count = mask.w * mask.h;
       const colors = new Uint8Array(count).fill(activeAttr());
@@ -2118,7 +2119,9 @@
     function previewText() {
       textPreview.clearRect(0, 0, W, H);
       if (!textSession) return;
-      const data = textPixels(textEntry.value);
+      const caretIndex = textEntry.selectionDirection === 'backward'
+        ? textEntry.selectionStart : textEntry.selectionEnd;
+      const data = textPixels(textEntry.value, caretIndex ?? textEntry.value.length);
       const palette = brightEnabled ? bright : normal;
       if (data) {
         if (!paperTransparent) {
@@ -2159,6 +2162,8 @@
       }
       previewText();
     });
+    textEntry.addEventListener('selectionchange', previewText);
+    textEntry.addEventListener('keyup', previewText);
     textEntry.addEventListener('keydown', event => {
       if (event.key === 'Enter') { event.preventDefault(); event.stopPropagation(); commitText(); }
       if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); cancelText(); }
