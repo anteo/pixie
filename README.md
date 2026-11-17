@@ -83,14 +83,11 @@ The interface follows the browser's language: Russian when its first preferred l
 
 ## Code structure
 
-`pixie.app.js` holds document state and coordinates editor actions. The other classic scripts loaded by `index.html` provide focused parts of the editor:
+`pixie.app.js` holds document state and coordinates editor actions. The other scripts loaded by `index.html` are grouped by responsibility:
 
-- `pixie.layer.js`, `pixie.selection.js`, and `pixie.geometry.js` handle bitmap storage, floating pixels, and shape calculations.
-- `pixie.composite.js` and `pixie.display.js` assemble ZX attributes and render the canvas or PNG output.
-- `pixie.trace.js` and `pixie.trace-controls.js` convert reference images and manage tracing settings.
-- `pixie.text.js` and `pixie.text-ui.js` rasterize fonts and manage text entry.
-- `pixie.project.js` and `pixie.files.js` handle project data and file dialogs.
-- `pixie.references.js`, `pixie.reference-frame.js`, `pixie.panel-rows.js`, `pixie.sortable.js`, and `pixie.viewport.js` handle reference placement and interface controls.
-- `pixie.i18n.js` reads translations from `pixie.ru.js`.
+- `pixie.core.js` handles bitmap storage, geometry, selections, ZX compositing, display output, and project data.
+- `pixie.text.js` rasterizes fonts and manages text entry.
+- `pixie.trace.js` converts reference images and manages tracing settings.
+- `pixie.ui.js` handles panels, reference placement, zoom, file dialogs, and localization. Russian strings live in `pixie.ru.js`.
 
 Scripts use ordinary `defer` tags in dependency order so the downloaded `index.html` still opens directly through `file://`.
