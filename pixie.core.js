@@ -256,7 +256,6 @@ window.PIXIE_COMPOSITE = (() => {
   function compositePixels(previews, sourceLayers, background, W, H) {
     const imageColors = new Uint8Array(MAX_W * MAX_H);
     if (background >= 0) imageColors.fill(background);
-    const priority = new Uint16Array(MAX_W * MAX_H);
     const coverage = new Uint8Array(W * H);
     const cellOwner = new Int16Array(768).fill(-1);
     const paperOwner = new Int16Array(768).fill(-1);
@@ -277,12 +276,11 @@ window.PIXIE_COMPOSITE = (() => {
           cellOwner[cell] = index;
           if (!on) { paperOwner[cell] = index; paperAttr[cell] = attr; }
           imageColors[y * MAX_W + x] = attr & 64 && color ? color + 8 : color;
-          priority[y * MAX_W + x] = (1 + index * 16) * (on ? 4 : 1);
           coverage[y * W + x] = 1;
         }
       }
     }
-    return { imageColors, priority, coverage, cellOwner, paperOwner, paperAttr };
+    return { imageColors, coverage, cellOwner, paperOwner, paperAttr };
   }
   function flatten(previews, sourceLayers, background, ignoreTransparency, W, H, colorDistance) {
     const visible = sourceLayers.map((layer, index) => layerForPreview(index, previews, sourceLayers))
@@ -293,13 +291,13 @@ window.PIXIE_COMPOSITE = (() => {
       direct.set(visible[0].bitmap); direct.set(visible[0].attrs, 6144);
       return direct;
     }
-    const { imageColors, priority, coverage, cellOwner, paperOwner, paperAttr } =
+    const { imageColors, coverage, cellOwner, paperOwner, paperAttr } =
       compositePixels(previews, sourceLayers, background, W, H);
     const result = new Uint8Array(6912);
-    const weights = new Uint32Array(16), counts = new Uint8Array(16);
+    const counts = new Uint8Array(16);
     for (let cellY = 0; cellY < H; cellY += 8) {
       for (let cellX = 0; cellX < W; cellX += 8) {
-        weights.fill(0); counts.fill(0);
+        counts.fill(0);
         const used = [];
         for (let py = cellY; py < cellY + 8; py++) {
           for (let px = cellX; px < cellX + 8; px++) {
@@ -307,7 +305,6 @@ window.PIXIE_COMPOSITE = (() => {
             const pixel = py * MAX_W + px, color = imageColors[pixel];
             if (!counts[color]) used.push(color);
             counts[color]++;
-            weights[color] += priority[pixel] || 1;
           }
         }
         let bestScore = Infinity, bestInkUse = Infinity;
@@ -328,7 +325,7 @@ window.PIXIE_COMPOSITE = (() => {
                 for (const color of used) {
                   const paperError = colorDistance[color][paperCode];
                   const inkError = colorDistance[color][inkCode];
-                  score += weights[color] * Math.min(paperError, inkError);
+                  score += counts[color] * Math.min(paperError, inkError);
                   if (inkError < paperError) inkUse += counts[color];
                   if (score > bestScore) break;
                 }
