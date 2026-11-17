@@ -15,16 +15,22 @@ Pixie lets you draw at individual pixel resolution while seeing how the result w
 
 ## What you can do
 
-- Draw with a pixel brush, polylines, outlined rectangles, and filled rectangles. Choose a brush size from 1 to 8 pixels.
-- Type directly on the canvas with the ZX ROM font. Hold **Shift** when placing text or a selection to align it to 8×8 cells.
-- Work with transparent layers: show, hide, move, reorder, rename, and merge them. Use a floating selection for moving or pasting artwork.
-- Edit colors with INK and PAPER swatches, or paint whole 8×8 attribute cells. The transparent swatch lets underlying layers show through.
-- Pan with a mouse wheel or trackpad scroll, zoom with pinch, and toggle cell and pixel grids. Keyboard zoom presets cover 1× through 9×.
-- Switch ZX attribute preview on or off. **PNG export follows the current preview**; SCR export always uses ZX screen encoding.
-
-![Pixel and attribute grid at high zoom](docs/images/pixel-grid.png)
-
-*At high zoom, individual pixels and attribute cell boundaries are visible.*
+- **Canvas.** Create a full 256×192 ZX screen or a smaller document.
+- **Pixel brush.** Click an empty pixel to draw or a filled pixel to erase; dragging continues the action chosen by the first pixel.
+- **Right-button eraser.** Right-click or right-drag to force erasing with the brush or either rectangle tool. The polyline tool does not use the right button.
+- **Polylines.** Click successive points to draw connected segments, or drag for a single segment. Hold Shift for horizontal, vertical, or 45° lines; press Escape to end the polyline.
+- **Rectangles.** Draw an outline or a filled rectangle with two clicks or one drag. The size is shown beside the pointer while drawing.
+- **Brush size.** Use a shared 1–8 pixel width for the drawing tools.
+- **Text.** Type directly on the canvas using the ZX ROM font. Hold Shift when placing text to align its start to an 8×8 cell.
+- **INK and PAPER.** Choose colors from swatches and switch BRIGHT on or off.
+- **Attribute painting.** Apply the brush, line, or rectangle tools to whole 8×8 attribute cells without changing the selected tool.
+- **Transparency.** Use transparent INK or PAPER and per-pixel layer masks to reveal artwork below.
+- **Layers.** Show, hide, rename, move, reorder, and merge layers.
+- **Selections.** Copy, cut, erase, and move a selected region. Pasted artwork stays floating until the selection is dismissed.
+- **ZX attribute preview.** When rendering the visible layers together, encode their composition using ZX screen attributes. Each layer itself always keeps attributes per 8×8 cell; switching the preview does not change that. PNG export follows the preview, while SCR export always uses ZX encoding.
+- **Grid.** Show 8×8 cell boundaries and, at high zoom, individual pixel boundaries.
+- **Zoom and pan.** Pinch to zoom, scroll to pan, or use keyboard zoom presets from 1× to 9×.
+- **Undo and redo.** Revert drawing, layer changes, and selections.
 
 ## Files
 
