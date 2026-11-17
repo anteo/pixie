@@ -75,14 +75,3 @@ The ZX Spectrum can store only one INK/PAPER color pair and one BRIGHT setting p
 | `Cmd/Ctrl+Shift+O`, `Cmd/Ctrl+Shift+S` | Import or export SCR |
 
 The interface follows the browser's language: Russian when its first preferred language is Russian, English otherwise.
-
-## Code structure
-
-`pixie.app.js` holds document state and coordinates editor actions. The other scripts loaded by `index.html` are grouped by responsibility:
-
-- `pixie.core.js` handles bitmap storage, geometry, selections, ZX compositing, display output, and project data.
-- `pixie.text.js` rasterizes fonts and manages text entry.
-- `pixie.trace.js` converts reference images and manages tracing settings.
-- `pixie.ui.js` handles panels, reference placement, zoom, file dialogs, and localization. Russian strings live in `pixie.ru.js`.
-
-Scripts use ordinary `defer` tags in dependency order so the downloaded `index.html` still opens directly through `file://`.
