@@ -21,7 +21,7 @@ window.PIXIE_RU = Object.freeze({
   '{count} installed font families available.': 'Доступно семейств шрифтов: {count}.',
   'Font access was denied or is unavailable here. Enter a font family manually.': 'Доступ к списку шрифтов закрыт или недоступен. Введите название шрифта вручную.',
   'Floating text. Move or resize it, then deselect to apply.': 'Плавающий текст. Переместите или масштабируйте его, затем снимите выделение для применения.',
-  'Click the canvas and type. Enter creates a movable selection; Escape cancels.': 'Нажмите на холсте и введите текст. Enter создаёт перемещаемое выделение; Escape отменяет ввод.',
+  'Click the canvas and type. Enter or another canvas click creates a movable selection; Escape cancels.': 'Нажмите на холсте и введите текст. Enter или повторный щелчок по холсту создаёт перемещаемое выделение; Escape отменяет ввод.',
   'Apply': 'Применить',
   'Apply tracing (Enter)': 'Применить трассировку (Enter)',
   'Cancel tracing (Escape)': 'Отменить трассировку (Escape)',

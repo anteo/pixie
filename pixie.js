@@ -1521,7 +1521,7 @@
         fill: 'Fill a connected area on the active layer.',
         select: 'Select an area; drag its edges to resize the image, holding Shift for 8×8 sizes. Arrows move it by 1 pixel, Shift+arrows to the next cell boundary.',
         'move-layer': 'Drag the canvas to move the active layer.',
-        text: 'Click the canvas and type. Enter creates a movable selection; Escape cancels.',
+        text: 'Click the canvas and type. Enter or another canvas click creates a movable selection; Escape cancels.',
       };
       note(tr(tips[name]));
     }
@@ -2313,6 +2313,13 @@
       const forceErase = event.button === 2 && (tool === 'draw' || tool === 'rect' || tool === 'fill-rect' || tool === 'ellipse' || tool === 'fill');
       if (event.button !== 0 && !forceErase) return;
       const p = point(event); if (!inside(p.x, p.y)) return;
+      if (tool === 'text' && textSession) {
+        event.preventDefault();
+        commitText();
+        if (tool === 'text') setTool('select');
+        updateCanvasCursor(p);
+        return;
+      }
       if (selectedReference >= 0 && !pendingMove) {
         event.preventDefault();
         selectedReference = -1;
