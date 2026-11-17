@@ -23,31 +23,24 @@ Click a preview to open it at full size.
 
 ## What you can do
 
-- **Canvas.** Create a full 256×192 ZX screen or a smaller document.
-- **Pixel brush.** Click an empty pixel to draw or a filled pixel to erase; dragging continues the action chosen by the first pixel.
-- **Text.** Choose the ZX ROM font or render a browser font into pixels. You can request the installed font list where the browser supports it, or enter a font family manually. Enter or a canvas click creates a floating selection that you can move or resize before applying. Hold Shift when placing text to align its start to an 8×8 cell.
-- **INK and PAPER.** Choose colors from swatches and switch BRIGHT on or off.
-- **ZX attribute preview.** When rendering the visible layers together, encode their composition using ZX screen attributes. Each layer itself always keeps attributes per 8×8 cell; switching the preview does not change that. PNG export follows the preview, while SCR export always uses ZX encoding.
-- **Layers.** Show, hide, rename, move, reorder, merge, and delete layers from their rows. Switching layers applies floating pixels to the previous layer while keeping the selection frame; use Copy/Paste to move artwork between layers. Layer content can extend beyond the document while you move and edit it; exports show only the document area. The visibility button cycles **on → off → solo** and shows the letter S in solo state; `V` cycles the active layer. Several layers can be solo at once.
-- **Reference images.** Load PNG, JPEG, WebP, or GIF images beneath the drawing and above the background. Each reference has its own visibility and opacity; drag rows in the right panel to reorder them. Select a reference to move it by its image or frame, or resize it from a corner. Hold Shift to preserve its proportions. References scale with the canvas and are excluded from SCR and PNG exports.
-- **Trace a reference.** Select a reference and click the trace button (`K`); tracing also works when its visibility is off. Pixie immediately previews its full area, or the current selection if one exists. Drag the frame edge to move it, a handle to resize it, or start a new selection inside or outside the frame. Undo/redo steps through changes to the tracing frame and settings without leaving tracing. **Apply** or Enter commits pixels to the active layer; **Cancel** or Escape discards the preview. Other references are hidden during tracing. Copy takes the traced pixels without applying them; Cut copies them and cancels tracing. Reference opacity does not affect converted pixels.
-- **Trace controls.** The trace button reveals controls for brightness, contrast, saturation, levels, simplification, noise, dithering, and neighboring cell color consistency in the right panel. Choose linear RGB Floyd–Steinberg, Sierra, Atkinson, Bayer 4×4/8×8, checker dithering, or no dithering. Controls update a floating trace immediately.
-- **Selections.** Copy, cut, erase, and move a selected region. Arrow keys nudge it by one pixel; Shift+arrow keys snap it to the next 8×8 cell boundary. Enter or a click outside the selection applies floating artwork. Cut remains reversible until applied: Paste continues the floating cut, and Escape restores the original pixels. Escape also discards an ordinary floating move or paste.
-- **Resize selections.** Drag the frame edges or corners to scale the pixels; hold Shift to snap the size to multiples of 8. Until applied, each resize uses the original selected pixels, so shrinking and enlarging again does not compound the loss of detail. Escape cancels a floating resize and removes the selection.
-- **Polylines.** Click successive points to draw connected segments, or drag for a single segment. Hold Shift for horizontal, vertical, or 45° lines; press Escape to end the polyline.
-- **Rectangles.** Draw an outline or a filled rectangle with two clicks or one drag. The size is shown beside the pointer while drawing.
-- **Ellipses.** Draw an outline with two clicks or one drag; hold Shift for a circle. The selected brush width applies to the outline.
-- **Flood fill.** Fill a connected region of the active layer, using its pixel colors and transparency as boundaries.
-- **Transparency.** Use transparent INK or PAPER and per-pixel layer masks to reveal artwork below. Drawing with transparent PAPER preserves existing paper pixels and their color.
-- **Attribute painting.** Apply the brush, line, rectangle, ellipse, or fill tools to whole 8×8 attribute cells without changing the selected tool.
-- **Solo preview.** With ZX preview on, all enabled layers are rendered together with ZX attributes; that result is dimmed outside the solo layers. Solo pixels remain at full brightness and follow layer order, while other rows in the layer panel become translucent. With ZX preview off, the dimmed area uses normal layer compositing. Solo is a canvas preview; exports retain the normal visible-layer image.
-- **Right-button eraser.** Right-click or right-drag to force erasing with the brush, rectangles, or ellipse. Right-click with the fill tool erases a connected area. The polyline tool does not use the right button.
-- **Brush size.** Choose a shared 1–8 pixel width in the right panel when a drawing tool is active.
-- **Grid.** Show 8×8 cell boundaries and, at high zoom, individual pixel boundaries.
-- **Zoom and pan.** Pinch to zoom, scroll to pan, or use keyboard zoom presets from 1× to 9×. When the canvas needs scrolling, a compact navigator appears at the bottom of the right panel. Its frame marks the visible area, and a click or drag jumps to another part of the image.
-- **Resizable side panel.** Drag the divider beside the canvas to change the right panel's width; double-click it to restore the default. The width is remembered between visits.
-- **Undo and redo.** Revert drawing, layer changes, and selections. During an unfinished drag or shape preview, Undo cancels that action first.
-- **Unsaved changes.** Creating a document, opening another project, or importing SCR asks whether to save when the current artwork has changed. A newly imported SCR counts as unsaved until the project is saved as `.pixie`.
+- **Pixel brush.** Draw or erase depending on the first pixel touched; a drag continues that action.
+- **Text.** Rasterize the ZX ROM font or browser fonts into pixels, then move or resize the text before applying it.
+- **ZX attribute preview.** See the combined layers with ZX color limits. Attributes within each layer remain tied to 8×8 cells; the switch affects the composite preview and PNG export.
+- **Layers.** Move, reorder, merge, and manage visibility independently. Artwork can extend beyond the document while editing.
+- **Reference images.** Place images beneath the artwork, then move, resize, reorder, or adjust their opacity without including them in exports.
+- **Reference tracing.** Convert the chosen reference, or a selected part of it, into a floating pixel preview on the active layer.
+- **Trace controls.** Adjust color, simplification, noise, dithering, and neighboring cell color consistency with a live preview.
+- **Selections.** Copy, cut, erase, and move pixels in a floating selection before applying or canceling the change.
+- **Selection resizing.** Scale a selection from its original pixels, so repeated resizing does not compound detail loss.
+- **Transparency.** Transparent INK and PAPER and per-pixel layer masks let lower artwork show through.
+- **Attribute painting.** Use drawing tools on whole 8×8 color cells instead of individual pixels.
+- **Solo preview.** Highlight one or more layers while dimming the rest, including the combined ZX rendering when attribute preview is on.
+- **Polylines.** Draw connected segments, with optional horizontal, vertical, or 45° constraint.
+- **Rectangles.** Draw outlines or filled rectangles.
+- **Ellipses.** Draw ellipse outlines or constrain them to circles.
+- **Flood fill.** Fill a connected region of the active layer.
+- **Right-button eraser.** Force erasing with the brush, rectangles, ellipse, or fill tool.
+- **Navigation.** Zoom and pan the canvas; a compact navigator shows the visible area when scrolling is needed.
 
 ## Files
 
