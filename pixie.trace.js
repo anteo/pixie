@@ -1,12 +1,12 @@
 window.PIXIE_TRACE = (() => {
   const defaults = Object.freeze({
-    brightness: 0, contrast: 0, saturation: 100, levels: 8, simplify: 0, noise: 0,
+    brightness: 0, contrast: 0, saturation: 100, levels: 8, noise: 0,
     ditherMode: 'fs', ditherStrength: 100, checkerStrength: 35, ditherDensity: 100,
     optimizeClashing: false, clashStrength: 45,
   });
   const ranges = Object.freeze({
     brightness: [-100, 100], contrast: [-100, 100], saturation: [0, 200],
-    levels: [2, 16], simplify: [0, 100], noise: [0, 100],
+    levels: [2, 16], noise: [0, 100],
     ditherStrength: [0, 100], checkerStrength: [0, 100],
     ditherDensity: [0, 100], clashStrength: [0, 100],
   });
@@ -75,7 +75,6 @@ window.PIXIE_TRACE = (() => {
     const brightness = options.brightness / 100 * 255;
     const saturation = options.saturation / 100;
     const levelStep = 255 / (options.levels - 1);
-    const simplifyStep = 1 + Math.round(options.simplify / 100 * 31);
     const noise = options.noise / 100 * 36;
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
       const documentX = x0 + x, documentY = y0 + y;
@@ -93,7 +92,6 @@ window.PIXIE_TRACE = (() => {
       for (let channel = 0; channel < 3; channel++) {
         let value = gray + (rgb[channel] - gray) * saturation;
         value = Math.round(value / levelStep) * levelStep;
-        value = Math.round(value / simplifyStep) * simplifyStep;
         const prepared = clamp(value + perturb);
         linear[index * 3 + channel] = toLinear(prepared);
       }
@@ -227,7 +225,7 @@ window.PIXIE_TRACE_CONTROLS = (() => {
         if (control.type === 'checkbox') control.checked = settings[key];
         else control.value = String(settings[key]);
         const output = control.closest('label').querySelector('output');
-        if (output) output.textContent = `${settings[key]}${['saturation', 'simplify', 'noise', 'ditherStrength',
+        if (output) output.textContent = `${settings[key]}${['saturation', 'noise', 'ditherStrength',
           'checkerStrength', 'ditherDensity', 'clashStrength'].includes(key) ? '%' : ''}`;
         const unavailable = key === 'ditherStrength' && ['none', 'checker'].includes(settings.ditherMode)
           || ['checkerStrength', 'ditherDensity'].includes(key) && settings.ditherMode !== 'checker'

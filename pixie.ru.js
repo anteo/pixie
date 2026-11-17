@@ -41,7 +41,6 @@ window.PIXIE_RU = Object.freeze({
   'Contrast': 'Контраст',
   'Saturation': 'Насыщенность',
   'Levels': 'Уровни',
-  'Simplify': 'Упрощение',
   'Noise': 'Шум',
   'Dithering': 'Дизеринг',
   'Floyd–Steinberg (linear RGB)': 'Флойд — Стейнберг (линейный RGB)',

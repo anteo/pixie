@@ -29,7 +29,7 @@ Click a preview to open it at full size.
 - **Layers.** Move, reorder, merge, and manage visibility independently. Artwork can extend beyond the document while editing.
 - **Reference images.** Place images beneath the artwork, then move, resize, reorder, or adjust their opacity without including them in exports.
 - **Reference tracing.** Convert the chosen reference, or a selected part of it, into a floating pixel preview on the active layer.
-- **Trace controls.** Adjust color, simplification, noise, dithering, and neighboring cell color consistency with a live preview.
+- **Trace controls.** Adjust color, noise, dithering, and neighboring cell color consistency with a live preview.
 - **Selections.** Copy, cut, erase, and move pixels in a floating selection before applying or canceling the change.
 - **Selection resizing.** Scale a selection from its original pixels, so repeated resizing does not compound detail loss.
 - **Transparency.** Transparent INK and PAPER and per-pixel layer masks let lower artwork show through.
