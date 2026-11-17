@@ -1467,7 +1467,7 @@
         'fill-rect': 'Draw a filled rectangle with two clicks or a drag.',
         ellipse: 'Draw an ellipse with two clicks or a drag; Shift makes a circle.',
         fill: 'Fill a connected area on the active layer.',
-        select: 'Select an area; Shift snaps the outline to 8×8 cells.',
+        select: 'Select an area; Shift snaps to 8×8 cells. Arrows move the selection by 1 pixel, Shift+arrows by 8.',
         'move-layer': 'Drag the canvas to move the active layer.',
         text: 'Click the canvas and type. Enter commits; Escape cancels.',
       };
@@ -1560,6 +1560,27 @@
       return { x: clamp(drag.source.x + p.x - drag.start.x, W - 1),
         y: clamp(drag.source.y + p.y - drag.start.y, H - 1),
         w: drag.source.w, h: drag.source.h };
+    }
+    function nudgeSelection(dx, dy) {
+      if (!selection) return;
+      const target = { ...selection,
+        x: clamp(selection.x + dx, W - 1), y: clamp(selection.y + dy, H - 1) };
+      if (sameSelection(selection, target)) return;
+      if (tracePreview) {
+        if (traceDrag) return;
+        const before = traceState();
+        pendingMove.target = target;
+        selection = target;
+        recordTraceChange(before);
+      } else {
+        const source = pendingMove ? null : { ...selection };
+        const data = pendingMove ? null : capture(selection);
+        remember();
+        if (pendingMove) pendingMove.target = target;
+        else pendingMove = { source, data, target, sourceLayer: activeLayer, targetLayer: activeLayer };
+        selection = target;
+      }
+      render(); updateCanvasCursor();
     }
     function previewMove(target) {
       const move = pendingMove || { source: drag.source, data: drag.data,
@@ -2682,11 +2703,23 @@
         selection = null; setTool('draw'); render(); return;
       }
       if (typing || event.altKey) return;
+      if (event.key === 'Enter' && selection) {
+        event.preventDefault(); remember();
+        finishPendingMove(); selection = null;
+        render(); updateCanvasCursor();
+        return;
+      }
+      const directions = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
+      if (directions[event.key] && selection && tool !== 'move-layer') {
+        event.preventDefault();
+        const step = event.shiftKey ? 8 : 1;
+        nudgeSelection(directions[event.key][0] * step, directions[event.key][1] * step);
+        return;
+      }
       if (selection && (event.key === 'Delete' || event.key === 'Backspace')) {
         event.preventDefault(); remember(); removeSelectionPixels(); render();
         note(tr('Selection cleared. Clipboard unchanged.')); return;
       }
-      const directions = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
       if (tool === 'move-layer' && directions[event.key]) {
         event.preventDefault(); remember();
         const step = event.shiftKey ? 8 : 1;

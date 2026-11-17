@@ -170,7 +170,7 @@ window.PIXIE_RU = Object.freeze({
   'Draw a filled rectangle with two clicks or a drag.': 'Два щелчка или перетаскивание рисуют закрашенный прямоугольник.',
   'Draw an ellipse with two clicks or a drag; Shift makes a circle.': 'Два щелчка или перетаскивание рисуют эллипс; Shift делает его кругом.',
   'Fill a connected area on the active layer.': 'Заливка связной области на активном слое.',
-  'Select an area; Shift snaps the outline to 8×8 cells.': 'Обведите область; Shift привязывает рамку к знакоместам 8×8.',
+  'Select an area; Shift snaps to 8×8 cells. Arrows move the selection by 1 pixel, Shift+arrows by 8.': 'Обведите область; Shift привязывает рамку к знакоместам 8×8. Стрелки перемещают выделение на 1 пиксель, Shift+стрелки — на 8.',
   'Drag the canvas to move the active layer.': 'Тяните холст, чтобы переместить активный слой.',
   'Click the canvas and type. Enter commits; Escape cancels.': 'Щёлкните на холсте и сразу вводите текст. Enter — готово, Escape — отмена.',
   'cells': 'знакомест',
