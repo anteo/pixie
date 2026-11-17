@@ -43,8 +43,14 @@
     const normal = ['#000000', '#0000d7', '#d70000', '#d700d7', '#00d700', '#00d7d7', '#d7d700', '#d7d7d7'];
     const bright = ['#000000', '#0000ff', '#ff0000', '#ff00ff', '#00ff00', '#00ffff', '#ffff00', '#ffffff'];
     const paletteRgb = [...normal, ...bright].map(hex => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16)));
-    const colorDistance = paletteRgb.map(a => paletteRgb.map(b =>
-      (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2));
+    // Penalize matching a bright color to its normal palette bank, except black.
+    const brightBankPenalty = 3 * 40 ** 2;
+    const colorDistance = paletteRgb.map((a, aIndex) => paletteRgb.map((b, bIndex) => {
+      const rgbError = (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2;
+      const differentBrightness = (aIndex >= 8) !== (bIndex >= 8);
+      const bothColored = aIndex % 8 !== 0 && bIndex % 8 !== 0;
+      return rgbError + (differentBrightness && bothColored ? brightBankPenalty : 0);
+    }));
     const cursorCoords = document.querySelector('#cursor-coords');
     const cursorInfo = document.querySelector('#cursor-info');
     const cursorInk = document.querySelector('#cursor-ink'), cursorPaper = document.querySelector('#cursor-paper');
