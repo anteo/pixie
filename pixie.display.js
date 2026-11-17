@@ -55,5 +55,27 @@ window.PIXIE_DISPLAY = (() => {
     return image;
   }
 
-  return { topSoloPixel, renderNormal, renderSolo };
+  async function pngBlob(width, height, imageColors, coverage, scr, paletteRgb) {
+    const output = document.createElement('canvas');
+    output.width = width; output.height = height;
+    const context = output.getContext('2d');
+    const image = context.createImageData(width, height);
+    for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
+      let color = imageColors[y * MAX_W + x];
+      if (scr) {
+        const attr = scr[6144 + attrIndex(x, y)];
+        const on = !!(scr[offset(x, y)] & (128 >> (x & 7)));
+        const index = on ? attr & 7 : (attr >> 3) & 7;
+        color = attr & 64 && index ? index + 8 : index;
+      }
+      const rgb = paletteRgb[color];
+      const index = (y * width + x) * 4;
+      image.data[index] = rgb[0]; image.data[index + 1] = rgb[1]; image.data[index + 2] = rgb[2];
+      image.data[index + 3] = coverage[y * width + x] ? 255 : 0;
+    }
+    context.putImageData(image, 0, 0);
+    return new Promise(resolve => output.toBlob(resolve, 'image/png'));
+  }
+
+  return { topSoloPixel, renderNormal, renderSolo, pngBlob };
 })();

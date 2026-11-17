@@ -1830,27 +1830,7 @@
       commitText();
       const { imageColors, coverage } = compositePixels(tracePreview ? null : undefined);
       const scr = zxPreview ? flatten(tracePreview ? null : undefined) : null;
-      const output = document.createElement('canvas');
-      output.width = W; output.height = H;
-      const outputContext = output.getContext('2d');
-      const image = outputContext.createImageData(W, H);
-      for (let y = 0; y < H; y++) {
-        for (let x = 0; x < W; x++) {
-          let color = imageColors[y * MAX_W + x];
-          if (scr) {
-            const attr = scr[6144 + attrIndex(x, y)];
-            const on = !!(scr[offset(x, y)] & (128 >> (x & 7)));
-            const index = on ? attr & 7 : (attr >> 3) & 7;
-            color = attr & 64 && index ? index + 8 : index;
-          }
-          const rgb = paletteRgb[color];
-          const i = (y * W + x) * 4;
-          image.data[i] = rgb[0]; image.data[i + 1] = rgb[1]; image.data[i + 2] = rgb[2];
-          image.data[i + 3] = coverage[y * W + x] ? 255 : 0;
-        }
-      }
-      outputContext.putImageData(image, 0, 0);
-      const blob = await new Promise(resolve => output.toBlob(resolve, 'image/png'));
+      const blob = await window.PIXIE_DISPLAY.pngBlob(W, H, imageColors, coverage, scr, paletteRgb);
       if (!blob) { note(tr('Could not create PNG.')); return; }
       download(name, blob, 'image/png');
     };
