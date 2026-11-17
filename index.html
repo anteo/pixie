@@ -170,7 +170,7 @@
     <button data-tool="text" class="icon-button" title="Text: click the canvas and type; Shift snaps to a cell (T)" aria-label="Text"><svg class="icon"><use href="#i-text"/></svg></button>
   </aside>
   <div class="canvas-area"><div id="viewport">
-    <div id="stage"><canvas id="transparency" width="512" height="384" aria-hidden="true"></canvas><div id="reference-layer" aria-hidden="true"></div><canvas id="screen" width="256" height="192"></canvas><canvas id="text-preview" width="256" height="192" aria-hidden="true"></canvas><input id="text-entry" type="text" aria-label="Text on canvas" autocomplete="off"><svg id="pixel-overlay" viewBox="0 0 256 192"
+    <div id="stage"><canvas id="transparency" width="512" height="384" aria-hidden="true"></canvas><div id="reference-layer" aria-hidden="true"></div><canvas id="screen" width="256" height="192"></canvas><canvas id="text-preview" width="256" height="192" aria-hidden="true"></canvas><svg id="pixel-overlay" viewBox="0 0 256 192"
       preserveAspectRatio="none" aria-hidden="true">
       <g id="pixel-grid"></g>
     </svg><svg id="overlay" viewBox="0 0 256 192" preserveAspectRatio="none" aria-hidden="true">
@@ -182,7 +182,7 @@
       <div class="reference-handle nw" data-handle="nw"></div><div class="reference-handle ne" data-handle="ne"></div>
       <div class="reference-handle se" data-handle="se"></div><div class="reference-handle sw" data-handle="sw"></div>
     </div></div>
-  </div><div class="zoom-presets" role="group" aria-label="Quick zoom">
+  </div><input id="text-entry" type="text" aria-label="Text on canvas" autocomplete="off"><div class="zoom-presets" role="group" aria-label="Quick zoom">
     <button id="zoom-1" title="Zoom 1× (Alt+1)">1×</button>
     <button id="zoom-2" title="Zoom 2× (Alt+2)">2×</button>
     <button id="zoom-fit" title="Fit screen (Alt+0)" aria-label="Fit screen"><svg class="icon"><use href="#i-fit"/></svg></button>

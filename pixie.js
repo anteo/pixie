@@ -1203,7 +1203,7 @@
       activeLayer = lowerIndex; bindActive();
       renderLayerList(); render(); note(tr('Merged with layer below.'));
     }
-    function setDocumentSize(width, height) {
+    function setDocumentSize(width, height, resetScroll = false) {
       W = width; H = height;
       screen.width = width; screen.height = height;
       renderReferences();
@@ -1221,7 +1221,7 @@
       scrExport.title = tr(fullScreen ? 'Export SCR (⌘⇧S)' : 'SCR export requires a full 256×192 screen');
       stage.style.width = width * zoom + 'px';
       stage.style.height = height * zoom + 'px';
-      viewport.scrollLeft = 0; viewport.scrollTop = 0;
+      if (resetScroll) { viewport.scrollLeft = 0; viewport.scrollTop = 0; }
       updateGrid();
     }
     function resetDocument(width = MAX_W, height = MAX_H) {
@@ -1236,7 +1236,7 @@
       attrMode = false; attrModeButton.classList.remove('active'); attrModeButton.setAttribute('aria-pressed', 'false');
       paperTransparent = true; updateSwatches();
       projectFileName = 'screen.pixie'; exportFileName = 'screen.scr';
-      setDocumentSize(width, height);
+      setDocumentSize(width, height, true);
       bindActive(); selection = null; setTool('draw');
       updateBackgroundSwatches(); renderLayerList(); renderReferenceList(); render(); fitZoom();
       note(tr('New blank document.'));
@@ -2403,7 +2403,7 @@
       const bytes = new Uint8Array(await file.arrayBuffer());
       if (bytes.length !== 6912) { note(tr('A standard 6912-byte SCR file is required.')); return; }
       stopLineSession(); stopRectangleSession(); cancelText();
-      setDocumentSize(MAX_W, MAX_H);
+      setDocumentSize(MAX_W, MAX_H, true);
       layers = [{ name: file.name, visible: true, solo: false, x: 0, y: 0,
         bitmap: bytes.slice(0, 6144), attrs: bytes.slice(6144), mask: new Uint8Array(6144).fill(0xff) }];
       clearTimeout(traceUpdateTimer);
@@ -2474,7 +2474,7 @@
         zxPreview = project.zxPreview;
         zxPreviewControl.classList.toggle('active', zxPreview);
         zxPreviewControl.setAttribute('aria-pressed', String(zxPreview));
-        setDocumentSize(project.width, project.height);
+        setDocumentSize(project.width, project.height, true);
         bindActive(); updateBackgroundSwatches();
         projectFileName = file.name; exportFileName = fileStem(file.name) + '.scr';
         undo.length = 0; redo.length = 0; selection = null; pendingMove = null;
