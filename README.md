@@ -20,7 +20,7 @@ Pixie lets you draw at individual pixel resolution while seeing how the result w
 - **Rectangles.** Draw an outline or a filled rectangle with two clicks or one drag. The size is shown beside the pointer while drawing.
 - **Ellipses.** Draw an outline with two clicks or one drag; hold Shift for a circle. The selected brush width applies to the outline.
 - **Flood fill.** Fill a connected region of the active layer, using its pixel colors and transparency as boundaries.
-- **Brush size.** Use a shared 1–8 pixel width for the drawing tools.
+- **Brush size.** Choose a shared 1–8 pixel width in the right panel when a drawing tool is active.
 - **Text.** Choose the ZX ROM font or render a browser font into pixels. You can request the installed font list where the browser supports it, or enter a font family manually. Enter or a canvas click creates a floating selection that you can move or resize before applying. Hold Shift when placing text to align its start to an 8×8 cell.
 - **INK and PAPER.** Choose colors from swatches and switch BRIGHT on or off.
 - **Attribute painting.** Apply the brush, line, rectangle, ellipse, or fill tools to whole 8×8 attribute cells without changing the selected tool.
@@ -64,6 +64,7 @@ The ZX Spectrum can store only one INK/PAPER color pair and one BRIGHT setting p
 | `Arrow keys`, `Shift+arrow keys` | Move a selection by 1 pixel or to the next 8×8 cell boundary; move the layer when the Move Layer tool is active |
 | `Enter` | Apply a floating selection and dismiss its outline |
 | `Alt+1`…`Alt+9`, `Alt+0` | Set zoom; fit the canvas |
+| `Alt+Shift+1`…`Alt+Shift+8` | Choose a 1–8 pixel brush size |
 | `L`, `Shift+L`, `Shift+M` | Add layer, delete layer, merge with layer below |
 | `Cmd/Ctrl+O`, `Cmd/Ctrl+S` | Open or save a Pixie project |
 | `Cmd/Ctrl+Shift+O`, `Cmd/Ctrl+Shift+S` | Import or export SCR |

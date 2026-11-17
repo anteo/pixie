@@ -156,7 +156,8 @@
   .workspace { flex: 1; min-height: 0; display: grid; grid-template-columns: var(--tool-rail-width) minmax(0, 1fr) 236px; }
   .tool-rail { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 10px 6px; border-right: 1px solid #444; }
   .rail-gap { height: 10px; flex: none; }
-  .stroke-presets { display: flex; align-items: center; gap: 4px; }
+  .stroke-presets { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; }
+  .stroke-presets .stroke-size { width: 100%; height: 34px; }
   .stroke-square { display: block; width: var(--square-size); height: var(--square-size); background: currentColor; }
   .canvas-area { position: relative; min-width: 0; min-height: 0; }
   .zoom-presets { position: absolute; right: 12px; bottom: 12px; display: flex; gap: 4px; padding: 4px; border: 1px solid #555; border-radius: 7px; background: #20232cee; }
@@ -175,7 +176,7 @@
   .layers-heading .icon { width: 17px; height: 17px; }
   #layer-list { display: flex; flex: none; flex-direction: column; gap: 4px; }
   #background-panel { display: grid; flex: none; gap: 8px; margin-top: 4px; margin-bottom: 8px; }
-  .layers-heading strong, #background-panel strong, .references-heading strong, .trace-title, .text-title { font-size: 17px; }
+  .layers-heading strong, #background-panel strong, .references-heading strong, .trace-title, .text-title, #stroke-settings strong { font-size: 17px; }
   #background-swatches { display: grid; grid-template-columns: repeat(9, minmax(0, 1fr)); gap: 3px; }
   #background-swatches .swatch { width: 100%; min-width: 0; height: 20px; }
   .layer-row { display: flex; align-items: center; gap: 5px; min-width: 0; padding: 5px; border: 1px solid #4d515b; border-radius: 5px; cursor: grab; user-select: none; touch-action: none; }
@@ -214,6 +215,8 @@
   .reference-opacity output { width: 4ch; text-align: right; font: 11px ui-monospace, monospace; }
   #trace-settings { flex: none; margin-top: 4px; }
   #trace-settings[hidden] { display: none; }
+  #stroke-settings { display: grid; flex: none; gap: 8px; margin-top: 4px; }
+  #stroke-settings[hidden] { display: none; }
   #text-settings { display: grid; flex: none; gap: 8px; margin-top: 4px; }
   #text-settings[hidden], #text-local-fonts[hidden], #text-bold-row[hidden], #text-italic-row[hidden] { display: none; }
   #text-settings .trace-control, #text-settings .trace-toggle { margin-top: 0; }

@@ -222,6 +222,7 @@
       note(tr(attrMode ? 'Drawing 8×8 cell attributes.' : 'Drawing pixels.'));
     };
     const strokeSizes = [1, 2, 3, 4, 5, 6, 7, 8];
+    const strokeSettingsPanel = document.querySelector('#stroke-settings');
     const strokePresets = document.querySelector('#stroke-presets');
     const strokeCurrent = document.querySelector('#stroke-current');
     const strokeDimensions = document.querySelector('#stroke-dimensions');
@@ -238,7 +239,7 @@
       }
       refreshPolyline(); refreshRectangle();
     }
-    strokeSizes.slice(0, 3).forEach((size, index) => {
+    strokeSizes.forEach((size, index) => {
       const button = document.createElement('button');
       button.type = 'button'; button.className = 'icon-button stroke-size';
       button.dataset.size = String(size);
@@ -252,6 +253,7 @@
     });
     setStrokeWidth(1);
     const drawingTools = new Set(['draw', 'line', 'rect', 'fill-rect', 'ellipse', 'fill']);
+    const sizedDrawingTools = new Set(['draw', 'line', 'rect', 'fill-rect', 'ellipse']);
     const undo = [], redo = [];
     const note = message => { status.textContent = message; };
     const inside = (x, y) => x >= 0 && x < W && y >= 0 && y < H;
@@ -1510,6 +1512,7 @@
       if (name !== 'select' && tracePreview) cancelTrace(false);
       tool = name;
       textSettingsPanel.hidden = name !== 'text';
+      strokeSettingsPanel.hidden = !sizedDrawingTools.has(name);
       document.querySelectorAll('[data-tool]').forEach(b => b.classList.toggle('active', b.dataset.tool === name));
       updateCanvasCursor();
       const tips = {
