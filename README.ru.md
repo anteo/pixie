@@ -2,7 +2,8 @@
 
 **Графический редактор экранов ZX Spectrum, работающий в браузере.**
 
-[![English](https://img.shields.io/badge/language-English-0000d7?labelColor=181a20&style=flat-square)](README.md) [![Русский](https://img.shields.io/badge/язык-Русский-d700d7?labelColor=181a20&style=flat-square)](README.ru.md) [![Открыть Pixie](https://img.shields.io/badge/открыть-Pixie-d70000?labelColor=181a20&style=flat-square)](https://anteo.github.io/pixie/)
+[![English](https://img.shields.io/badge/lang-en-blue.svg)](README.md)
+[![Русский](https://img.shields.io/badge/lang-ru-green.svg)](README.ru.md)
 
 **[Открыть Pixie в браузере](https://anteo.github.io/pixie/)** · Установка и сборка не нужны. Можно также скачать репозиторий и открыть `index.html` локально.
 
