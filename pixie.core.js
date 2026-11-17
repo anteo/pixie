@@ -639,3 +639,103 @@ window.PIXIE_PROJECT = (() => {
   }
   return { projectText, parseProject };
 })();
+
+window.PIXIE_DRAW = (() => {
+  const { layerAttr, layerBit, layerOpaque } = window.PIXIE_LAYER;
+  const { rectangle, cellPoint, walkLine, ellipseOutline, connectedArea } = window.PIXIE_GEOMETRY;
+  function create({ getState, setBit, setAttr, paintAttrCell, drawingAttr, remember }) {
+    function paintBrush(x, y, on) {
+      const { strokeWidth, inkTransparent, paperTransparent } = getState();
+      const offset = Math.floor((strokeWidth - 1) / 2);
+      for (let by = y - offset; by < y - offset + strokeWidth; by++) {
+        for (let bx = x - offset; bx < x - offset + strokeWidth; bx++) {
+          if (on && !inkTransparent) {
+            setBit(bx, by, true, true);
+            paintAttrCell(bx, by, !paperTransparent);
+          } else setBit(bx, by, false, on ? false : !paperTransparent);
+        }
+      }
+    }
+    function line(a, b, on) {
+      walkLine(a, b, (x, y) => paintBrush(x, y, on));
+    }
+    function paintShape(action, start, end, on) {
+      if (action === 'line') { line(start, end, on); return; }
+      if (action === 'ellipse') { ellipseOutline(start, end, (a, b) => line(a, b, on)); return; }
+      const rect = rectangle(start, end);
+      if (action === 'fill-rect') {
+        for (let y = rect.y; y < rect.y + rect.h; y++) {
+          for (let x = rect.x; x < rect.x + rect.w; x++) paintBrush(x, y, on);
+        }
+      } else {
+        const left = rect.x, right = rect.x + rect.w - 1;
+        const top = rect.y, bottom = rect.y + rect.h - 1;
+        line({ x: left, y: top }, { x: right, y: top }, on);
+        line({ x: right, y: top }, { x: right, y: bottom }, on);
+        line({ x: right, y: bottom }, { x: left, y: bottom }, on);
+        line({ x: left, y: bottom }, { x: left, y: top }, on);
+      }
+    }
+    function cellLine(a, b) {
+      walkLine(a, b, (x, y) => paintAttrCell(x * 8, y * 8));
+    }
+    function paintAttributeShape(action, start, end) {
+      const a = cellPoint(start), b = cellPoint(end);
+      if (action === 'line') { cellLine(a, b); return; }
+      if (action === 'ellipse') { ellipseOutline(a, b, cellLine); return; }
+      const rect = rectangle(a, b);
+      if (action === 'fill-rect') {
+        for (let y = rect.y; y < rect.y + rect.h; y++) {
+          for (let x = rect.x; x < rect.x + rect.w; x++) paintAttrCell(x * 8, y * 8);
+        }
+      } else {
+        const left = rect.x, right = rect.x + rect.w - 1;
+        const top = rect.y, bottom = rect.y + rect.h - 1;
+        cellLine({ x: left, y: top }, { x: right, y: top });
+        cellLine({ x: right, y: top }, { x: right, y: bottom });
+        cellLine({ x: right, y: bottom }, { x: left, y: bottom });
+        cellLine({ x: left, y: bottom }, { x: left, y: top });
+      }
+    }
+    function fillArea(point, forceErase, previousSelection) {
+      const { layer, width, height, attrMode, inkTransparent, paperTransparent } = getState();
+      const sx = point.x - layer.x, sy = point.y - layer.y;
+      if (attrMode && !forceErase) {
+        const left = Math.floor(-layer.x / 8), top = Math.floor(-layer.y / 8);
+        const columns = Math.floor((width - 1 - layer.x) / 8) - left + 1;
+        const rows = Math.floor((height - 1 - layer.y) / 8) - top + 1;
+        const startX = Math.floor(sx / 8) - left, startY = Math.floor(sy / 8) - top;
+        const source = layerAttr(layer, sx, sy);
+        const queue = connectedArea(columns, rows, startX, startY,
+          (x, y) => layerAttr(layer, (left + x) * 8, (top + y) * 8) === source);
+        remember(previousSelection);
+        for (const cell of queue) {
+          const x = cell % columns, y = Math.floor(cell / columns);
+          paintAttrCell(layer.x + (left + x) * 8, layer.y + (top + y) * 8);
+        }
+        return;
+      }
+      const keyAt = (x, y) => {
+        const localX = x - layer.x, localY = y - layer.y;
+        if (!layerOpaque(layer, localX, localY)) return -1;
+        const value = layerAttr(layer, localX, localY);
+        const color = layerBit(layer, localX, localY) ? value & 7 : value >> 3 & 7;
+        return color && value & 64 ? color + 8 : color;
+      };
+      const source = keyAt(point.x, point.y);
+      const queue = connectedArea(width, height, point.x, point.y, (x, y) => keyAt(x, y) === source);
+      remember(previousSelection);
+      for (const cell of queue) {
+        const x = cell % width, y = Math.floor(cell / width);
+        if (forceErase || inkTransparent) setBit(x, y, false, forceErase && !paperTransparent);
+        else {
+          const attribute = drawingAttr(x, y);
+          setBit(x, y, true, true);
+          setAttr(x, y, attribute);
+        }
+      }
+    }
+    return { paintBrush, line, cellLine, paintShape, paintAttributeShape, fillArea };
+  }
+  return { create };
+})();
