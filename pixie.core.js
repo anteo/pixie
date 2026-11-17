@@ -644,7 +644,7 @@ window.PIXIE_PROJECT = (() => {
 window.PIXIE_DRAW = (() => {
   const { layerAttr, layerBit, layerOpaque } = window.PIXIE_LAYER;
   const { rectangle, cellPoint, walkLine, ellipseOutline, connectedArea } = window.PIXIE_GEOMETRY;
-  function create({ getState, setBit, setAttr, paintAttrCell, drawingAttr, remember }) {
+  function create({ getState, setBit, setAttr, paintAttrCell, paintAttributeBlock, drawingAttr, remember }) {
     function paintPixel(x, y, on) {
       const { inkTransparent, paperTransparent } = getState();
       if (on && !inkTransparent) {
@@ -712,31 +712,31 @@ window.PIXIE_DRAW = (() => {
         line({ x: left, y: bottom }, { x: left, y: top }, on);
       }
     }
-    function cellLine(a, b) {
-      walkLine(a, b, (x, y) => paintAttrCell(x * 8, y * 8));
+    function cellLine(a, b, on = true) {
+      walkLine(a, b, (x, y) => paintAttributeBlock(x * 8, y * 8, on));
     }
-    function paintAttributeShape(action, start, end) {
+    function paintAttributeShape(action, start, end, on = true) {
       const a = cellPoint(start), b = cellPoint(end);
-      if (action === 'line') { cellLine(a, b); return; }
-      if (action === 'ellipse') { ellipseOutline(a, b, cellLine); return; }
+      if (action === 'line') { cellLine(a, b, on); return; }
+      if (action === 'ellipse') { ellipseOutline(a, b, (first, last) => cellLine(first, last, on)); return; }
       const rect = rectangle(a, b);
       if (action === 'fill-rect') {
         for (let y = rect.y; y < rect.y + rect.h; y++) {
-          for (let x = rect.x; x < rect.x + rect.w; x++) paintAttrCell(x * 8, y * 8);
+          for (let x = rect.x; x < rect.x + rect.w; x++) paintAttributeBlock(x * 8, y * 8, on);
         }
       } else {
         const left = rect.x, right = rect.x + rect.w - 1;
         const top = rect.y, bottom = rect.y + rect.h - 1;
-        cellLine({ x: left, y: top }, { x: right, y: top });
-        cellLine({ x: right, y: top }, { x: right, y: bottom });
-        cellLine({ x: right, y: bottom }, { x: left, y: bottom });
-        cellLine({ x: left, y: bottom }, { x: left, y: top });
+        cellLine({ x: left, y: top }, { x: right, y: top }, on);
+        cellLine({ x: right, y: top }, { x: right, y: bottom }, on);
+        cellLine({ x: right, y: bottom }, { x: left, y: bottom }, on);
+        cellLine({ x: left, y: bottom }, { x: left, y: top }, on);
       }
     }
     function fillArea(point, forceErase, previousSelection) {
       const { layer, width, height, attrMode, inkTransparent, paperTransparent } = getState();
       const sx = point.x - layer.x, sy = point.y - layer.y;
-      if (attrMode && !forceErase) {
+      if (attrMode) {
         const left = Math.floor(-layer.x / 8), top = Math.floor(-layer.y / 8);
         const columns = Math.floor((width - 1 - layer.x) / 8) - left + 1;
         const rows = Math.floor((height - 1 - layer.y) / 8) - top + 1;
@@ -747,7 +747,8 @@ window.PIXIE_DRAW = (() => {
         remember(previousSelection);
         for (const cell of queue) {
           const x = cell % columns, y = Math.floor(cell / columns);
-          paintAttrCell(layer.x + (left + x) * 8, layer.y + (top + y) * 8);
+          paintAttributeBlock(layer.x + (left + x) * 8, layer.y + (top + y) * 8,
+            !forceErase && (!inkTransparent || !paperTransparent));
         }
         return;
       }

@@ -119,7 +119,7 @@
     const active = () => editingLayer || layers[activeLayer];
     function bit(x, y) {
       const sx = x - active().x, sy = y - active().y;
-      return layerBit(active(), sx, sy);
+      return layerOpaque(active(), sx, sy) && layerBit(active(), sx, sy);
     }
     function setBit(x, y, on, opaque = on ? !inkTransparent : !paperTransparent) {
       const sx = x - active().x, sy = y - active().y;
@@ -150,6 +150,27 @@
           if (on) writeLayerBit(active(), px, py, on, !inkTransparent);
           else if (!paperTransparent) writeLayerBit(active(), px, py, on, true);
         }
+      }
+    }
+    function isAttributeCellFilled(x, y) {
+      const sx = (x - active().x) & ~7, sy = (y - active().y) & ~7;
+      let hasSelectedPixels = false;
+      for (let py = sy; py < sy + 8; py++) for (let px = sx; px < sx + 8; px++) {
+        const selected = layerBit(active(), px, py) ? !inkTransparent : !paperTransparent;
+        if (!selected) continue;
+        hasSelectedPixels = true;
+        if (!layerOpaque(active(), px, py)) return false;
+      }
+      return hasSelectedPixels;
+    }
+    function paintAttributeBlock(x, y, on) {
+      const sx = x - active().x, sy = y - active().y;
+      const x0 = sx & ~7, y0 = sy & ~7;
+      if (on) writeLayerAttr(active(), sx, sy, drawingAttr(x, y));
+      for (let py = y0; py < y0 + 8; py++) for (let px = x0; px < x0 + 8; px++) {
+        const bit = layerBit(active(), px, py);
+        const selected = bit ? !inkTransparent : !paperTransparent;
+        if (selected) writeLayerBit(active(), px, py, bit, on);
       }
     }
     function recolorSelection(kind, index) {
@@ -951,7 +972,7 @@
     const { paintBrush, brushLine, line, cellLine, paintShape, paintAttributeShape, fillArea } = window.PIXIE_DRAW.create({
       getState: () => ({ layer: active(), width: W, height: H, attrMode,
         strokeWidth, brushShape, inkTransparent, paperTransparent }),
-      setBit, setAttr, paintAttrCell, drawingAttr, remember,
+      setBit, setAttr, paintAttrCell, paintAttributeBlock, drawingAttr, remember,
     });
     const shapeMeasure = document.querySelector('#shape-measure');
     function lineEnd(start, end, shifted, maxX = W - 1, maxY = H - 1) {
@@ -1033,7 +1054,7 @@
       const layer = layers[index];
       const previewLayer = cloneLayer(layer);
       withLayer(index, previewLayer, () => {
-        if (rectangleSession.attrMode) paintAttributeShape(rectangleSession.action, rectangleSession.start, end);
+        if (rectangleSession.attrMode) paintAttributeShape(rectangleSession.action, rectangleSession.start, end, rectangleSession.on);
         else paintShape(rectangleSession.action, rectangleSession.start, end, rectangleSession.on);
       });
       const previews = new Map([[index, previewLayer]]);
@@ -1049,19 +1070,18 @@
     }
     function refreshRectangle() {
       if (!rectangleSession?.raw || !rectangleSession.pointer) return;
-      rectangleSession.attrMode = attrMode && !rectangleSession.forceErase;
+      rectangleSession.attrMode = attrMode;
       previewRectangle(rectangleSession.raw, shiftHeld, rectangleSession.pointer.x, rectangleSession.pointer.y);
     }
     function clickRectangle(p, forceErase, shifted, clientX, clientY) {
       if (!rectangleSession) {
         rectangleSession = { layer: active(), action: tool, start: p, forceErase,
-          attrMode: attrMode && !forceErase, on: !forceErase };
+          attrMode, on: !forceErase };
         previewRectangle(p, shifted, clientX, clientY);
         return true;
       }
       if (forceErase) {
         rectangleSession.forceErase = true;
-        rectangleSession.attrMode = false;
         rectangleSession.on = false;
       }
       const index = layers.indexOf(rectangleSession.layer);
@@ -1070,7 +1090,7 @@
         ? ellipseEndpoint(rectangleSession.start, p, shifted, rectangleSession.attrMode) : p;
       remember();
       withLayer(index, layers[index], () => {
-        if (rectangleSession.attrMode) paintAttributeShape(rectangleSession.action, rectangleSession.start, end);
+        if (rectangleSession.attrMode) paintAttributeShape(rectangleSession.action, rectangleSession.start, end, rectangleSession.on);
         else paintShape(rectangleSession.action, rectangleSession.start, end, rectangleSession.on);
       });
       stopRectangleSession();
@@ -1298,9 +1318,12 @@
       if (tool === 'move-layer' && !finalizedPending) remember(previousSelection);
       drag = { start: p, last: p, action: resizeHandle ? 'resize'
         : tool === 'select' && contains(selection, p) ? 'move' : tool,
-        attrMode: attrMode && drawingTools.has(tool) && !forceErase, previousSelection, finalizedPending,
+        attrMode: attrMode && drawingTools.has(tool), previousSelection, finalizedPending,
         pointerId: event.pointerId };
-      if (tool === 'draw' && !drag.attrMode) drag.on = !forceErase && (inkTransparent || !bit(p.x, p.y));
+      if (tool === 'draw') drag.on = drag.attrMode
+        ? !forceErase && (!inkTransparent || !paperTransparent)
+          && !(isAttributeCellFilled(p.x, p.y) && getAttr(p.x, p.y) === drawingAttr(p.x, p.y))
+        : !forceErase && (inkTransparent || !bit(p.x, p.y));
       if (tool === 'move-layer') drag.origin = { x: active().x, y: active().y };
       if (drag.action === 'move') {
         drag.source = { ...selection };
@@ -1319,7 +1342,7 @@
       screen.setPointerCapture(event.pointerId);
       updateCanvasCursor(p);
       if (tool === 'draw') {
-        if (drag.attrMode) paintAttrCell(p.x, p.y);
+        if (drag.attrMode) paintAttributeBlock(p.x, p.y, drag.on);
         else {
           paintBrush(p.x, p.y, drag.on);
           if (brushShape === 'spray') drag.sprayTimer = setInterval(() => {
@@ -1349,7 +1372,7 @@
       if (!drag) return;
       const raw = point(event), p = { x: clamp(raw.x, W - 1), y: clamp(raw.y, H - 1) };
       if (drag.action === 'draw') {
-        if (drag.attrMode) cellLine(cellPoint(drag.last), cellPoint(p));
+        if (drag.attrMode) cellLine(cellPoint(drag.last), cellPoint(p), drag.on);
         else brushLine(drag.last, p, drag.on);
       }
       if (drag.action === 'move-layer') {
@@ -1397,7 +1420,7 @@
       if (drag.sprayTimer) clearInterval(drag.sprayTimer);
       if (drag.action === 'draw') {
         const raw = point(event), p = { x: clamp(raw.x, W - 1), y: clamp(raw.y, H - 1) };
-        if (drag.attrMode) cellLine(cellPoint(drag.last), cellPoint(p));
+        if (drag.attrMode) cellLine(cellPoint(drag.last), cellPoint(p), drag.on);
         else brushLine(drag.last, p, drag.on);
       }
       if (drag.action === 'move-layer') {
