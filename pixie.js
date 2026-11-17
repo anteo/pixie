@@ -9,7 +9,7 @@
       writeLayerBit, writeLayerAttr, cloneLayer } = window.PIXIE_LAYER;
     let layers = [emptyLayer(tr('Layer {number}', { number: 1 }))];
     let activeLayer = 0;
-    let references = [], selectedReference = -1, referenceDrag = null;
+    let references = [], selectedReference = -1;
     let traceSettings = { ...window.PIXIE_TRACE.defaults }, tracePreview = null, traceDrag = null;
     let projectFileName = 'screen.pixie', exportFileName = 'screen.scr', projectHandle = null;
     let savedProjectText = null;
@@ -767,47 +767,9 @@
       control.addEventListener('blur', finishEdit);
     }
     syncTraceControls();
-    referenceFrame.addEventListener('pointerdown', event => {
-      if (event.button !== 0 || selectedReference < 0) return;
-      const handle = event.target.dataset.handle || 'move';
-      event.preventDefault(); event.stopPropagation();
-      const reference = references[selectedReference];
-      referenceDrag = { reference, handle, pointerId: event.pointerId,
-        clientX: event.clientX, clientY: event.clientY,
-        x: reference.x, y: reference.y, width: reference.width, height: reference.height, changed: false };
-      event.target.setPointerCapture(event.pointerId);
-    });
-    referenceFrame.addEventListener('pointermove', event => {
-      const drag = referenceDrag;
-      if (!drag || drag.pointerId !== event.pointerId || !references.includes(drag.reference)) return;
-      event.preventDefault();
-      const dx = (event.clientX - drag.clientX) / zoom, dy = (event.clientY - drag.clientY) / zoom;
-      let x = drag.x, y = drag.y, width = drag.width, height = drag.height;
-      if (drag.handle === 'move') { x += dx; y += dy; }
-      else {
-        const west = drag.handle.includes('w'), north = drag.handle.includes('n');
-        width = Math.max(1, drag.width + (west ? -dx : dx));
-        height = Math.max(1, drag.height + (north ? -dy : dy));
-        if (event.shiftKey) {
-          const scaleX = width / drag.width, scaleY = height / drag.height;
-          const scale = Math.max(1 / drag.width, 1 / drag.height,
-            Math.abs(scaleX - 1) >= Math.abs(scaleY - 1) ? scaleX : scaleY);
-          width = drag.width * scale; height = drag.height * scale;
-        }
-        if (west) x = drag.x + drag.width - width;
-        if (north) y = drag.y + drag.height - height;
-      }
-      if (Math.abs(x - drag.reference.x) < 0.01 && Math.abs(y - drag.reference.y) < 0.01 &&
-          Math.abs(width - drag.reference.width) < 0.01 && Math.abs(height - drag.reference.height) < 0.01) return;
-      if (!drag.changed) { remember(); drag.changed = true; }
-      Object.assign(drag.reference, { x, y, width, height });
-      renderReferences();
-    });
-    referenceFrame.addEventListener('pointerup', event => {
-      if (referenceDrag?.pointerId === event.pointerId) referenceDrag = null;
-    });
-    referenceFrame.addEventListener('pointercancel', event => {
-      if (referenceDrag?.pointerId === event.pointerId) referenceDrag = null;
+    window.PIXIE_REFERENCE_FRAME.bind(referenceFrame, {
+      selected: () => selectedReference, getReferences: () => references, getZoom: () => zoom,
+      remember, render: renderReferences,
     });
     function addLayer() {
       stopLineSession(); stopRectangleSession();
