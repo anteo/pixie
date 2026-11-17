@@ -1731,13 +1731,17 @@
       if (event.key === 'Escape') {
         if (cancelDrawingGesture()) { event.preventDefault(); return; }
         if (tracePreview) { event.preventDefault(); cancelTrace(); return; }
+        if (selection || pendingMove) {
+          event.preventDefault(); remember();
+          pendingMove = null; selection = null;
+          updateReferenceFrame(); render(); updateCanvasCursor();
+          return;
+        }
         if (selectedReference >= 0) {
           event.preventDefault(); selectedReference = -1; renderReferenceList(); return;
         }
         if (typing) event.target.blur();
-        if (selection) remember();
-        finishPendingMove();
-        selection = null; setTool('draw'); render(); return;
+        setTool('draw'); render(); return;
       }
       if (typing || event.altKey) return;
       if (event.key === 'Enter' && selection) {
