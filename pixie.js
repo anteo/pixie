@@ -98,7 +98,9 @@
     let activeLayer = 0;
     let references = [], selectedReference = -1, referenceDrag = null;
     let traceSettings = { ...window.PIXIE_TRACE.defaults }, tracePreview = null, traceDrag = null;
-    let projectFileName = 'screen.pixie', exportFileName = 'screen.scr';
+    let projectFileName = 'screen.pixie', exportFileName = 'screen.scr', projectHandle = null;
+    let savedProjectText = null;
+    let projectDocumentId = 0, nextProjectDocumentId = 1;
     const screen = document.querySelector('#screen');
     const referenceLayer = document.querySelector('#reference-layer');
     const referenceFrame = document.querySelector('#reference-frame');
@@ -392,7 +394,8 @@
     } : null;
     function snapshot() {
       const tracing = tracePreview?.move === pendingMove;
-      return { activeLayer, projectFileName, exportFileName, backgroundCode, width: W, height: H,
+      return { activeLayer, projectFileName, exportFileName, projectHandle, projectDocumentId,
+        backgroundCode, width: W, height: H,
         references: references.map(reference => ({ ...reference })), selectedReference,
         selection: tracing ? (tracePreview.previousSelection ? { ...tracePreview.previousSelection } : null)
           : selection ? { ...selection } : null,
@@ -413,6 +416,7 @@
       tracePreview = null; traceDrag = null; traceSettingsPanel.hidden = true;
       const saved = from.pop(); layers = saved.layers; activeLayer = saved.activeLayer;
       projectFileName = saved.projectFileName; exportFileName = saved.exportFileName;
+      projectHandle = saved.projectHandle; projectDocumentId = saved.projectDocumentId;
       backgroundCode = saved.backgroundCode;
       references = saved.references.map(reference => ({ ...reference }));
       selectedReference = saved.selectedReference;
@@ -1358,10 +1362,12 @@
       zxPreview = true; zxPreviewControl.classList.add('active'); zxPreviewControl.setAttribute('aria-pressed', 'true');
       attrMode = false; attrModeButton.classList.remove('active'); attrModeButton.setAttribute('aria-pressed', 'false');
       paperTransparent = true; updateSwatches();
-      projectFileName = 'screen.pixie'; exportFileName = 'screen.scr';
+      projectFileName = 'screen.pixie'; exportFileName = 'screen.scr'; projectHandle = null;
+      projectDocumentId = nextProjectDocumentId++;
       setDocumentSize(width, height, true);
       selection = null; setTool('draw');
       updateBackgroundSwatches(); renderLayerList(); renderReferenceList(); render(); fitZoom();
+      savedProjectText = projectText();
       note(tr('New blank document.'));
     }
     function newDocument() {
@@ -2815,7 +2821,10 @@
     document.querySelector('#file').onchange = async event => {
       const file = event.target.files[0]; if (!file) return;
       const bytes = new Uint8Array(await file.arrayBuffer());
-      if (bytes.length !== 6912) { note(tr('A standard 6912-byte SCR file is required.')); return; }
+      if (bytes.length !== 6912) {
+        note(tr('A standard 6912-byte SCR file is required.'));
+        event.target.value = ''; return;
+      }
       stopLineSession(); stopRectangleSession(); cancelText();
       setDocumentSize(MAX_W, MAX_H, true);
       layers = [{ name: file.name, visible: true, solo: false, x: 0, y: 0,
@@ -2829,6 +2838,8 @@
       zxPreviewControl.classList.add('active'); zxPreviewControl.setAttribute('aria-pressed', 'true');
       updateBackgroundSwatches();
       projectFileName = fileStem(file.name) + '.pixie'; exportFileName = file.name;
+      projectHandle = null; projectDocumentId = nextProjectDocumentId++;
+      savedProjectText = null;
       undo.length = 0; redo.length = 0; selection = null; pendingMove = null;
       renderLayerList(); render(); note(tr('Imported SCR: {name}', { name: file.name }));
       event.target.value = '';
@@ -2870,11 +2881,14 @@
       if (!blob) { note(tr('Could not create PNG.')); return; }
       download(name, blob, 'image/png');
     };
-    document.querySelector('#open-project').onclick = () => document.querySelector('#project-file').click();
-    document.querySelector('#project-file').onchange = async event => {
-      const file = event.target.files[0]; if (!file) return;
+    async function loadProject(file, handle = null) {
       try {
-        const project = parseProject(await file.text());
+        const source = await file.text();
+        let project = parseProject(source);
+        if (handle) {
+          const currentSource = await (await handle.getFile()).text();
+          if (currentSource !== source) project = parseProject(currentSource);
+        }
         await Promise.all(project.references.map(async reference => {
           reference.image = await decodeReference(reference.dataUrl);
         }));
@@ -2891,18 +2905,75 @@
         setDocumentSize(project.width, project.height, true);
         updateBackgroundSwatches();
         projectFileName = file.name; exportFileName = fileStem(file.name) + '.scr';
+        projectHandle = handle; projectDocumentId = nextProjectDocumentId++;
         undo.length = 0; redo.length = 0; selection = null; pendingMove = null;
         renderLayerList(); renderReferenceList(); renderReferences(); render();
+        savedProjectText = projectText();
         note(tr('Opened project {name}', { name: file.name }));
       } catch (error) { note(tr('Could not open project: {message}', { message: error.message })); }
+    }
+    document.querySelector('#open-project').onclick = async () => {
+      if (!window.showOpenFilePicker) { document.querySelector('#project-file').click(); return; }
+      try {
+        const [handle] = await window.showOpenFilePicker({ types: [{ description: 'Pixie project',
+          accept: { 'application/octet-stream': ['.pixie'] } }] });
+        if (handle) await loadProject(await handle.getFile(), handle);
+      } catch (error) {
+        if (error.name !== 'AbortError') note(tr('Could not open project: {message}', { message: error.message }));
+      }
+    };
+    document.querySelector('#project-file').onchange = async event => {
+      const file = event.target.files[0]; if (file) await loadProject(file);
       event.target.value = '';
     };
+    async function canWriteProject(handle) {
+      if (!handle.queryPermission || !handle.requestPermission) return true;
+      const permission = { mode: 'readwrite' };
+      if (await handle.queryPermission(permission) === 'granted') return true;
+      return await handle.requestPermission(permission) === 'granted';
+    }
+    function setProjectFile(handle, name) {
+      projectHandle = handle;
+      projectFileName = name;
+      exportFileName = fileStem(name) + '.scr';
+      for (const saved of [...undo, ...redo]) {
+        if (saved.projectDocumentId !== projectDocumentId) continue;
+        saved.projectHandle = handle;
+        saved.projectFileName = name;
+        saved.exportFileName = exportFileName;
+      }
+    }
     async function saveProject() {
+      if (window.showSaveFilePicker) {
+        try {
+          const handle = projectHandle || await window.showSaveFilePicker({ suggestedName: projectFileName,
+            types: [{ description: 'Pixie project', accept: { 'application/octet-stream': ['.pixie'] } }] });
+          if (!await canWriteProject(handle)) {
+            note(tr('Write access to the project file was not granted.'));
+            return false;
+          }
+          commitText();
+          const content = projectText();
+          const writable = await handle.createWritable();
+          await writable.write(content);
+          await writable.close();
+          setProjectFile(handle, handle.name);
+          savedProjectText = content;
+          note(tr('Saved project {name}', { name: handle.name }));
+          return true;
+        } catch (error) {
+          if (error.name !== 'AbortError') note(tr('Could not save project: {message}', { message: error.message }));
+          return false;
+        }
+      }
       const name = await askFileName(tr('Pixie project'), projectFileName, '.pixie');
       if (!name) return false;
       commitText();
-      projectFileName = name; exportFileName = fileStem(name) + '.scr';
-      download(name, projectText(), 'application/toml;charset=utf-8');
+      setProjectFile(null, name);
+      const content = projectText();
+      download(name, content, 'application/toml;charset=utf-8');
+      savedProjectText = content;
+      note(tr('Downloaded a copy of {name}; this browser cannot overwrite the original file.', { name }));
       return true;
     }
     document.querySelector('#save-project').onclick = saveProject;
@@ -3034,4 +3105,5 @@
       if (shortcuts[code]) { event.preventDefault(); shortcuts[code](); return; }
     });
     drawTransparency(); fitZoom(); updateGrid(); renderLayerList(); render();
+    savedProjectText = projectText();
   })();

@@ -45,6 +45,8 @@ Pixie lets you draw at individual pixel resolution while seeing how the result w
 | `.scr` | Import or export a standard 6,912-byte ZX Spectrum screen. Export requires a full 256×192 canvas. |
 | `.png` | Export the visible image, including transparency. The ZX preview switch determines whether colors are encoded to 8×8 attributes first. |
 
+In browsers with the File System Access API, the first project save opens a file picker; later saves write to that same `.pixie` file. Opening a project through the editor also keeps its file handle for saving. Other browsers use a download instead and cannot overwrite an existing local file directly.
+
 The ZX Spectrum can store only one INK/PAPER color pair and one BRIGHT setting per 8×8 cell. Colors from overlapping or shifted layers may therefore be approximated when ZX preview is enabled or when exporting SCR. Merging layers also encodes the result to ZX attributes.
 
 ## Quick start
