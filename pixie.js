@@ -267,7 +267,7 @@
       if (!from.length) return;
       stopLineSession(); stopRectangleSession();
       to.push(snapshot());
-      clearTimeout(traceUpdateTimer);
+      traceControlsUI.clearTimer();
       tracePreview = null; traceDrag = null; traceSettingsPanel.hidden = true;
       const saved = from.pop(); layers = saved.layers; activeLayer = saved.activeLayer;
       projectFileName = saved.projectFileName; exportFileName = saved.exportFileName;
@@ -570,23 +570,11 @@
       event.target.value = '';
       if (added) { renderReferences(); renderReferenceList(); render(); }
     };
-    const traceControls = [...document.querySelectorAll('[data-trace]')];
-    const traceControlBefore = new Map();
-    let traceUpdateTimer = null;
-    function syncTraceControls() {
-      for (const control of traceControls) {
-        const key = control.dataset.trace;
-        if (control.type === 'checkbox') control.checked = traceSettings[key];
-        else control.value = String(traceSettings[key]);
-        const output = control.closest('label').querySelector('output');
-        if (output) output.textContent = `${traceSettings[key]}${['saturation', 'simplify', 'noise', 'ditherStrength',
-          'checkerStrength', 'ditherDensity', 'clashStrength'].includes(key) ? '%' : ''}`;
-        const unavailable = key === 'ditherStrength' && ['none', 'checker'].includes(traceSettings.ditherMode)
-          || ['checkerStrength', 'ditherDensity'].includes(key) && traceSettings.ditherMode !== 'checker'
-          || key === 'clashStrength' && !traceSettings.optimizeClashing;
-        control.closest('label').hidden = unavailable;
-      }
-    }
+    const traceControlsUI = window.PIXIE_TRACE_CONTROLS.bind({
+      getSettings: () => traceSettings, setSettings: value => { traceSettings = value; },
+      getPreview: () => tracePreview, traceState, recordTraceChange, updateFloatingTrace,
+    });
+    const syncTraceControls = traceControlsUI.sync;
     function traceReference() {
       return references[selectedReference] || null;
     }
@@ -617,19 +605,15 @@
       tracePreview.future.length = 0;
     }
     function restoreTraceState(state) {
-      clearTimeout(traceUpdateTimer);
+      traceControlsUI.clearTimer();
       traceSettings = window.PIXIE_TRACE.normalize(state.settings);
       syncTraceControls();
       changeTraceArea(state.area, state.target);
       updateCanvasCursor();
     }
-    function flushTraceControlHistory() {
-      for (const before of traceControlBefore.values()) recordTraceChange(before);
-      traceControlBefore.clear();
-    }
     function undoTrace() {
       if (!tracePreview) return;
-      flushTraceControlHistory();
+      traceControlsUI.flushHistory();
       if (traceDrag) {
         const before = traceDrag.before;
         traceDrag = null; restoreTraceState(before);
@@ -643,7 +627,7 @@
     }
     function redoTrace() {
       if (!tracePreview || traceDrag) return;
-      flushTraceControlHistory();
+      traceControlsUI.flushHistory();
       const next = tracePreview.future.pop();
       if (!next) return;
       tracePreview.history.push(traceState());
@@ -652,10 +636,10 @@
     }
     function cancelTrace(announce = true) {
       if (!tracePreview) return;
-      clearTimeout(traceUpdateTimer);
+      traceControlsUI.clearTimer();
       const previousSelection = tracePreview.previousSelection;
       tracePreview = null; traceDrag = null;
-      traceControlBefore.clear();
+      traceControlsUI.clearHistory();
       pendingMove = null; selection = previousSelection ? { ...previousSelection } : null;
       traceSettingsPanel.hidden = true;
       renderReferences(); renderReferenceList(); render();
@@ -663,12 +647,12 @@
     }
     function applyTrace() {
       if (!tracePreview) return;
-      clearTimeout(traceUpdateTimer);
+      traceControlsUI.clearTimer();
       if (traceDrag?.nextArea) changeTraceArea(traceDrag.nextArea, traceDrag.nextTarget);
       else updateFloatingTrace();
       remember();
       tracePreview = null; traceDrag = null;
-      traceControlBefore.clear();
+      traceControlsUI.clearHistory();
       finishPendingMove(); selection = null;
       traceSettingsPanel.hidden = true;
       renderReferences(); renderReferenceList(); render();
@@ -688,7 +672,7 @@
       setTool('select');
       tracePreview = { reference, source: sampleReference(reference), area: null,
         previousSelection, move: null, history: [], future: [] };
-      traceControlBefore.clear();
+      traceControlsUI.clearHistory();
       traceSettingsPanel.hidden = false;
       changeTraceArea(area);
       renderReferences(); renderReferenceList();
@@ -702,33 +686,6 @@
       if (tracePreview?.move !== pendingMove) return;
       changeTraceArea(tracePreview.area, pendingMove.target);
     }
-    for (const control of traceControls) {
-      const beginEdit = () => {
-        if (tracePreview && !traceControlBefore.has(control)) traceControlBefore.set(control, traceState());
-      };
-      const finishEdit = () => {
-        const before = traceControlBefore.get(control);
-        if (before) recordTraceChange(before);
-        traceControlBefore.delete(control);
-      };
-      control.addEventListener('pointerdown', beginEdit);
-      control.addEventListener('keydown', beginEdit);
-      control.addEventListener('input', () => {
-        beginEdit();
-        const key = control.dataset.trace;
-        traceSettings[key] = control.type === 'checkbox' ? control.checked
-          : control.tagName === 'SELECT' ? control.value : Number(control.value);
-        traceSettings = window.PIXIE_TRACE.normalize(traceSettings);
-        syncTraceControls();
-        clearTimeout(traceUpdateTimer);
-        traceUpdateTimer = setTimeout(updateFloatingTrace, 60);
-      });
-      control.addEventListener('change', () => {
-        clearTimeout(traceUpdateTimer); updateFloatingTrace(); finishEdit();
-      });
-      control.addEventListener('blur', finishEdit);
-    }
-    syncTraceControls();
     window.PIXIE_REFERENCE_FRAME.bind(referenceFrame, {
       selected: () => selectedReference, getReferences: () => references, getZoom: () => zoom,
       remember, render: renderReferences,
@@ -819,7 +776,7 @@
     }
     function resetDocument(width = MAX_W, height = MAX_H) {
       stopLineSession(); stopRectangleSession(); cancelText(); remember();
-      clearTimeout(traceUpdateTimer);
+      traceControlsUI.clearTimer();
       pendingMove = null; tracePreview = null; traceDrag = null;
       traceSettingsPanel.hidden = true;
       layers = [emptyLayer(tr('Layer {number}', { number: 1 }))]; activeLayer = 0; backgroundCode = 0;
@@ -944,10 +901,10 @@
       return snap ? selectionRectangle({ x: left, y: top }, { x: right, y: bottom }, true) : result;
     }
     function queueTraceArea(area, target, immediate = false) {
-      clearTimeout(traceUpdateTimer);
+      traceControlsUI.clearTimer();
       if (immediate) { changeTraceArea(area, target); return; }
       drawOverlay(target);
-      traceUpdateTimer = setTimeout(() => changeTraceArea(area, target), 50);
+      traceControlsUI.schedule(() => changeTraceArea(area, target), 50);
     }
     function updateCanvasCursor(p = cursorPoint, clientX = null, clientY = null) {
       if (tracePreview) {
@@ -1409,7 +1366,7 @@
       if (!dx && !dy && !traceDrag.moved) return;
       traceDrag.moved = true;
       if (traceDrag.kind === 'move') {
-        clearTimeout(traceUpdateTimer);
+        traceControlsUI.clearTimer();
         const target = { ...traceDrag.target,
           x: clamp(traceDrag.target.x + dx, W - 1), y: clamp(traceDrag.target.y + dy, H - 1) };
         pendingMove.target = target; selection = { ...target }; render();
@@ -1428,7 +1385,7 @@
       if (!traceDrag || traceDrag.pointerId !== event.pointerId) return false;
       const original = traceDrag;
       if (cancelled) {
-        clearTimeout(traceUpdateTimer);
+        traceControlsUI.clearTimer();
         changeTraceArea(original.area, original.target);
       } else {
         moveTraceDrag(event, true);
@@ -1679,7 +1636,7 @@
     document.querySelector('#layer-merge').onclick = mergeDown;
     function captureSelection() {
       if (tracePreview) {
-        clearTimeout(traceUpdateTimer);
+        traceControlsUI.clearTimer();
         if (traceDrag?.nextArea) changeTraceArea(traceDrag.nextArea, traceDrag.nextTarget);
         else updateFloatingTrace();
       }
@@ -1802,7 +1759,7 @@
       setDocumentSize(MAX_W, MAX_H, true);
       layers = [{ name: file.name, visible: true, solo: false, x: 0, y: 0,
         bitmap: bytes.slice(0, 6144), attrs: bytes.slice(6144), mask: new Uint8Array(6144).fill(0xff), extra: new Map() }];
-      clearTimeout(traceUpdateTimer);
+      traceControlsUI.clearTimer();
       tracePreview = null; traceDrag = null;
       references = []; selectedReference = -1; renderReferences(); renderReferenceList();
       traceSettingsPanel.hidden = true;
@@ -1848,7 +1805,7 @@
         }));
         stopLineSession(); stopRectangleSession(); cancelText();
         layers = project.layers; references = project.references; selectedReference = -1;
-        clearTimeout(traceUpdateTimer);
+        traceControlsUI.clearTimer();
         tracePreview = null; traceDrag = null;
         traceSettingsPanel.hidden = true;
         traceSettings = project.traceSettings; syncTraceControls();
