@@ -54,7 +54,7 @@
         '[data-tool="fill-rect"]': ['Filled rectangle (F): two clicks or drag; right button erases', 'Filled rectangle'],
         '[data-tool="ellipse"]': ['Ellipse (E): two clicks or drag; Shift makes a circle; right button erases', 'Ellipse'],
         '[data-tool="fill"]': ['Fill connected area (P); right button erases', 'Fill'],
-        '[data-tool="select"]': ['Select area (S); Shift snaps to 8×8 cells', 'Select'],
+        '[data-tool="select"]': ['Select area (S); drag its edges to resize, Shift snaps size to 8×8 cells', 'Select'],
         '[data-tool="move-layer"]': ['Move layer (M; arrows move 1 pixel, Shift+arrows snap to the next 8×8 cell)', 'Move layer'],
         '#attr-mode': ['Draw 8×8 cell attributes (A)', 'Draw cell attributes'],
         '[data-tool="text"]': ['Text: click the canvas and type; Shift snaps to a cell (T)', 'Text'],
@@ -337,12 +337,8 @@
     function recolorSelection(kind, index) {
       if (pendingMove) {
         remember();
-        const data = pendingMove.data;
-        for (let i = 0; i < data.colors.length; i++) {
-          if (index < 8) data.colors[i] = kind === 'ink'
-            ? (data.colors[i] & ~7) | index : (data.colors[i] & ~0x38) | (index << 3);
-          if (!!data.bits[i] === (kind === 'ink')) data.opacity[i] = index === 8 ? 0 : 1;
-        }
+        recolorPixels(pendingMove.data, kind, index);
+        if (pendingMove.scaleSource) recolorPixels(pendingMove.scaleSource, kind, index);
         render();
         note(tr('{kind} of floating selection changed.', { kind: kind.toUpperCase() }));
         return;
@@ -373,10 +369,19 @@
         { kind: kind.toUpperCase() }));
     }
     const activeAttr = () => (ink | (paper << 3) | (brightEnabled ? 64 : 0));
+    function recolorPixels(data, kind, index) {
+      for (let i = 0; i < data.colors.length; i++) {
+        if (index < 8) data.colors[i] = kind === 'ink'
+          ? (data.colors[i] & ~7) | index : (data.colors[i] & ~0x38) | (index << 3);
+        if (!!data.bits[i] === (kind === 'ink')) data.opacity[i] = index === 8 ? 0 : 1;
+      }
+    }
+    const copyPixels = data => ({ ...data, bits: data.bits.slice(),
+      colors: data.colors.slice(), opacity: data.opacity.slice() });
     const copyMove = move => move ? {
       source: move.source ? { ...move.source } : null, target: { ...move.target },
       sourceLayer: move.sourceLayer, targetLayer: move.targetLayer,
-      data: { ...move.data, bits: move.data.bits.slice(), colors: move.data.colors.slice(), opacity: move.data.opacity.slice() },
+      data: copyPixels(move.data), scaleSource: move.scaleSource ? copyPixels(move.scaleSource) : null,
     } : null;
     function snapshot() {
       const tracing = tracePreview?.move === pendingMove;
@@ -1402,7 +1407,9 @@
       if (!s) { selectionOutline.replaceChildren(); return; }
       const outline = mark('rect', { x: s.x, y: s.y, width: s.w, height: s.h }, '#ff40ff');
       outline.setAttribute('stroke-dasharray', '4 3');
-      if (!tracePreview) { selectionOutline.replaceChildren(outline); return; }
+      if (!tracePreview && (tool !== 'select' || drag?.action === 'select')) {
+        selectionOutline.replaceChildren(outline); return;
+      }
       const size = 7 / zoom;
       const handles = [[s.x, s.y], [s.x + s.w / 2, s.y], [s.x + s.w, s.y],
         [s.x, s.y + s.h / 2], [s.x + s.w, s.y + s.h / 2],
@@ -1430,6 +1437,20 @@
         (Math.abs(clientX - left) <= 6 || Math.abs(clientX - right) <= 6);
       return nearHorizontalEdge || nearVerticalEdge ? 'move' : 'new';
     }
+    function selectionResizeHit(clientX, clientY) {
+      if (!selection || tool !== 'select' || tracePreview) return null;
+      const rect = screen.getBoundingClientRect();
+      const left = rect.left + selection.x * rect.width / W;
+      const right = rect.left + (selection.x + selection.w) * rect.width / W;
+      const top = rect.top + selection.y * rect.height / H;
+      const bottom = rect.top + (selection.y + selection.h) * rect.height / H;
+      if (clientX < left - 7 || clientX > right + 7 || clientY < top - 7 || clientY > bottom + 7) return null;
+      const west = Math.abs(clientX - left), east = Math.abs(clientX - right);
+      const north = Math.abs(clientY - top), south = Math.abs(clientY - bottom);
+      const horizontal = Math.min(west, east) <= 7 ? (west <= east ? 'w' : 'e') : '';
+      const vertical = Math.min(north, south) <= 7 ? (north <= south ? 'n' : 's') : '';
+      return vertical + horizontal || null;
+    }
     function resizeTraceArea(area, handle, dx, dy, snap) {
       let left = area.x, top = area.y, right = area.x + area.w - 1, bottom = area.y + area.h - 1;
       if (handle.includes('w')) left = Math.max(0, Math.min(right, left + dx));
@@ -1445,7 +1466,7 @@
       drawOverlay(target);
       traceUpdateTimer = setTimeout(() => changeTraceArea(area, target), 50);
     }
-    function updateCanvasCursor(p = cursorPoint) {
+    function updateCanvasCursor(p = cursorPoint, clientX = null, clientY = null) {
       if (tracePreview) {
         const rect = screen.getBoundingClientRect();
         const hit = traceDrag?.kind || (p && traceHit(rect.left + (p.x + 0.5) * rect.width / W,
@@ -1455,9 +1476,13 @@
         screen.style.cursor = hit === 'move' ? (traceDrag ? 'grabbing' : 'grab') : resize[hit] || 'crosshair';
         return;
       }
-      screen.style.cursor = drag?.action === 'move' || drag?.action === 'move-layer' ? 'grabbing'
+      const resize = { n: 'ns-resize', s: 'ns-resize', e: 'ew-resize', w: 'ew-resize',
+        nw: 'nwse-resize', se: 'nwse-resize', ne: 'nesw-resize', sw: 'nesw-resize' };
+      const handle = drag?.action === 'resize' ? drag.handle
+        : clientX != null && clientY != null ? selectionResizeHit(clientX, clientY) : null;
+      screen.style.cursor = resize[handle] || (drag?.action === 'move' || drag?.action === 'move-layer' ? 'grabbing'
         : tool === 'move-layer' || (tool === 'select' && contains(selection, p)) ? 'grab'
-        : tool === 'text' ? 'text' : 'crosshair';
+        : tool === 'text' ? 'text' : 'crosshair');
     }
     function setTool(name) {
       if (tool === 'line' && name !== 'line') stopLineSession();
@@ -1473,7 +1498,7 @@
         'fill-rect': 'Draw a filled rectangle with two clicks or a drag.',
         ellipse: 'Draw an ellipse with two clicks or a drag; Shift makes a circle.',
         fill: 'Fill a connected area on the active layer.',
-        select: 'Select an area; Shift snaps to 8×8 cells. Arrows move the selection by 1 pixel, Shift+arrows to the next cell boundary.',
+        select: 'Select an area; drag its edges to resize the image, holding Shift for 8×8 sizes. Arrows move it by 1 pixel, Shift+arrows to the next cell boundary.',
         'move-layer': 'Drag the canvas to move the active layer.',
         text: 'Click the canvas and type. Enter commits; Escape cancels.',
       };
@@ -1504,6 +1529,38 @@
         opacity[i] = layerOpaque(active(), lx, ly) ? 1 : 0;
       }
       return { x: s.x, y: s.y, w: s.w, h: s.h, bits, colors, opacity };
+    }
+    function scaleSelection(data, width, height) {
+      const bits = new Uint8Array(width * height);
+      const colors = new Uint8Array(bits.length);
+      const opacity = new Uint8Array(bits.length);
+      for (let y = 0; y < height; y++) {
+        const sourceY = Math.min(data.h - 1, Math.floor(y * data.h / height));
+        for (let x = 0; x < width; x++) {
+          const sourceX = Math.min(data.w - 1, Math.floor(x * data.w / width));
+          const source = sourceY * data.w + sourceX, target = y * width + x;
+          bits[target] = data.bits[source];
+          colors[target] = data.colors[source];
+          opacity[target] = data.opacity[source];
+        }
+      }
+      return { ...data, w: width, h: height, bits, colors, opacity };
+    }
+    function resizedSelection(bounds, handle, dx, dy, snap) {
+      const extent = (size, maximum) => {
+        if (!snap || maximum < 8) return Math.max(1, Math.min(maximum, size));
+        return Math.max(8, Math.min(Math.floor(maximum / 8) * 8, Math.round(size / 8) * 8));
+      };
+      let { x, y, w, h } = bounds;
+      if (dx && handle.includes('w')) {
+        w = extent(bounds.w - dx, bounds.x + bounds.w);
+        x = bounds.x + bounds.w - w;
+      } else if (dx && handle.includes('e')) w = extent(bounds.w + dx, W - bounds.x);
+      if (dy && handle.includes('n')) {
+        h = extent(bounds.h - dy, bounds.y + bounds.h);
+        y = bounds.y + bounds.h - h;
+      } else if (dy && handle.includes('s')) h = extent(bounds.h + dy, H - bounds.y);
+      return { x, y, w, h };
     }
     function clear(s) {
       for (let y = s.y; y < s.y + s.h; y++) for (let x = s.x; x < s.x + s.w; x++) setBit(x, y, false, false);
@@ -1598,6 +1655,21 @@
         sourceLayer: activeLayer, targetLayer: activeLayer };
       const previews = movePreviewLayers(move.source, move.data, target, move.sourceLayer, move.targetLayer);
       render(flatten(previews), target, previews);
+    }
+    function previewSelectionResize(p, snap, clientX, clientY) {
+      const target = resizedSelection(drag.source, drag.handle, p.x - drag.start.x, p.y - drag.start.y, snap);
+      drag.raw = p;
+      drag.pointer = { x: clientX, y: clientY };
+      drag.target = target;
+      drag.data = scaleSelection(drag.originalData, target.w, target.h);
+      const previews = movePreviewLayers(drag.sourceToClear, drag.data, target,
+        drag.sourceLayer, drag.targetLayer);
+      render(flatten(previews), target, previews);
+      showShapeMeasure(`${target.w}×${target.h} px`, clientX, clientY);
+    }
+    function refreshSelectionResize() {
+      if (drag?.action === 'resize' && drag.raw && drag.pointer)
+        previewSelectionResize(drag.raw, shiftHeld, drag.pointer.x, drag.pointer.y);
     }
     function paintBrush(x, y, on) {
       const width = strokeWidth;
@@ -2095,9 +2167,10 @@
       }
       if (forceErase) event.preventDefault();
       if (tool !== 'text' && textSession) commitText();
+      const resizeHandle = tool === 'select' ? selectionResizeHit(event.clientX, event.clientY) : null;
       const previousSelection = selection ? { ...selection } : null;
       let finalizedPending = false;
-      if (pendingMove && (tool !== 'select' || !contains(selection, p))) {
+      if (pendingMove && (tool !== 'select' || (!contains(selection, p) && !resizeHandle))) {
         remember(); finishPendingMove();
         finalizedPending = true;
       }
@@ -2129,7 +2202,8 @@
       }
       if (drawingTools.has(tool) && !finalizedPending) remember(previousSelection);
       if (tool === 'move-layer' && !finalizedPending) remember(previousSelection);
-      drag = { start: p, last: p, action: tool === 'select' && contains(selection, p) ? 'move' : tool,
+      drag = { start: p, last: p, action: resizeHandle ? 'resize'
+        : tool === 'select' && contains(selection, p) ? 'move' : tool,
         attrMode: attrMode && drawingTools.has(tool) && !forceErase, previousSelection, finalizedPending,
         pointerId: event.pointerId };
       if (tool === 'draw' && !drag.attrMode) drag.on = !forceErase && (inkTransparent || !bit(p.x, p.y));
@@ -2137,6 +2211,14 @@
       if (drag.action === 'move') {
         drag.source = { ...selection };
         drag.data = pendingMove ? pendingMove.data : capture(drag.source);
+      }
+      if (drag.action === 'resize') {
+        drag.source = { ...selection };
+        drag.sourceToClear = pendingMove ? pendingMove.source : drag.source;
+        drag.sourceLayer = pendingMove ? pendingMove.sourceLayer : activeLayer;
+        drag.targetLayer = pendingMove ? pendingMove.targetLayer : activeLayer;
+        drag.originalData = pendingMove ? pendingMove.scaleSource || pendingMove.data : capture(drag.source);
+        drag.handle = resizeHandle;
       }
       if (drag.action === 'select') selection = null;
       screen.setPointerCapture(event.pointerId);
@@ -2174,6 +2256,7 @@
       }
       if (drag.action === 'select') previewSelection(p, event.shiftKey || shiftHeld, event.clientX, event.clientY);
       else if (drag.action === 'move') previewMove(moveTarget(p));
+      else if (drag.action === 'resize') previewSelectionResize(p, event.shiftKey || shiftHeld, event.clientX, event.clientY);
       else render();
       drag.last = p;
     });
@@ -2181,7 +2264,7 @@
       const p = point(event);
       cursorPoint = inside(p.x, p.y) ? p : null;
       paintCursor();
-      updateCanvasCursor(cursorPoint);
+      updateCanvasCursor(cursorPoint, event.clientX, event.clientY);
     }
     screen.addEventListener('pointerdown', updateCursor);
     screen.addEventListener('pointermove', updateCursor);
@@ -2236,6 +2319,16 @@
             selection = target;
           }
         } else { remember(); finishPendingMove(); selection = null; }
+      }
+      if (drag.action === 'resize') {
+        const raw = point(event), p = { x: clamp(raw.x, W - 1), y: clamp(raw.y, H - 1) };
+        previewSelectionResize(p, event.shiftKey || shiftHeld, event.clientX, event.clientY);
+        if (!sameSelection(drag.source, drag.target)) {
+          remember();
+          pendingMove = { source: drag.sourceToClear, data: drag.data, target: { ...drag.target },
+            sourceLayer: drag.sourceLayer, targetLayer: drag.targetLayer, scaleSource: drag.originalData };
+          selection = { ...drag.target };
+        }
       }
       hideShapeMeasure(); drag = null; render();
       updateCursor(event);
@@ -2676,14 +2769,14 @@
     document.addEventListener('keydown', event => {
       if (event.code === 'ShiftLeft' || event.code === 'ShiftRight') {
         shiftHeld = true;
-        refreshPolyline(); refreshRectangle();
+        refreshPolyline(); refreshRectangle(); refreshSelectionResize();
         if (drag?.action === 'select' && drag.raw && drag.pointer) previewSelection(drag.raw, true, drag.pointer.x, drag.pointer.y);
       }
     }, true);
     document.addEventListener('keyup', event => {
       if (event.code === 'ShiftLeft' || event.code === 'ShiftRight') {
         shiftHeld = false;
-        refreshPolyline(); refreshRectangle();
+        refreshPolyline(); refreshRectangle(); refreshSelectionResize();
         if (drag?.action === 'select' && drag.raw && drag.pointer) previewSelection(drag.raw, false, drag.pointer.x, drag.pointer.y);
       }
     }, true);
