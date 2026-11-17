@@ -50,6 +50,7 @@
         '[data-tool="line"]': ['Polyline (D): click for points, drag for one segment; Shift snaps to axes and 45°; Escape ends', 'Polyline'],
         '[data-tool="rect"]': ['Rectangle (R): two clicks or drag; right button erases', 'Rectangle'],
         '[data-tool="fill-rect"]': ['Filled rectangle (F): two clicks or drag; right button erases', 'Filled rectangle'],
+        '[data-tool="ellipse"]': ['Ellipse (E): two clicks or drag; Shift makes a circle; right button erases', 'Ellipse'],
         '[data-tool="select"]': ['Select area (S); Shift snaps to 8×8 cells', 'Select'],
         '[data-tool="move-layer"]': ['Move layer (M; arrows move 1 pixel, Shift+arrows move 8)', 'Move layer'],
         '#attr-mode': ['Draw 8×8 cell attributes (A)', 'Draw cell attributes'],
@@ -219,7 +220,7 @@
       strokePresets.appendChild(button);
     });
     setStrokeWidth(1);
-    const drawingTools = new Set(['draw', 'line', 'rect', 'fill-rect']);
+    const drawingTools = new Set(['draw', 'line', 'rect', 'fill-rect', 'ellipse']);
     const undo = [], redo = [];
     const note = message => { status.textContent = message; };
     const inside = (x, y) => x >= 0 && x < W && y >= 0 && y < H;
@@ -790,6 +791,7 @@
         line: 'Click for polyline points or drag one segment; Escape ends the polyline.',
         rect: 'Draw an outlined rectangle with two clicks or a drag.',
         'fill-rect': 'Draw a filled rectangle with two clicks or a drag.',
+        ellipse: 'Draw an ellipse with two clicks or a drag; Shift makes a circle.',
         select: 'Select an area; Shift snaps the outline to 8×8 cells.',
         'move-layer': 'Drag the canvas to move the active layer.',
         text: 'Click the canvas and type. Enter commits; Escape cancels.',
@@ -913,8 +915,28 @@
         if (e2 <= dx) { err += dx; y += sy; }
       }
     }
+    function ellipseOutline(start, end, segment) {
+      const bounds = rectangle(start, end);
+      const left = bounds.x, top = bounds.y;
+      const right = left + bounds.w - 1, bottom = top + bounds.h - 1;
+      if (bounds.w === 1 || bounds.h === 1) {
+        segment({ x: left, y: top }, { x: right, y: bottom });
+        return;
+      }
+      const cx = (left + right) / 2, cy = (top + bottom) / 2;
+      const rx = (right - left) / 2, ry = (bottom - top) / 2;
+      const steps = Math.ceil(Math.PI * Math.max(bounds.w, bounds.h));
+      let previous = { x: right, y: Math.round(cy) };
+      for (let i = 1; i <= steps; i++) {
+        const angle = i * 2 * Math.PI / steps;
+        const next = { x: Math.round(cx + rx * Math.cos(angle)), y: Math.round(cy + ry * Math.sin(angle)) };
+        segment(previous, next);
+        previous = next;
+      }
+    }
     function paintShape(action, start, end, on) {
       if (action === 'line') { line(start, end, on); return; }
+      if (action === 'ellipse') { ellipseOutline(start, end, (a, b) => line(a, b, on)); return; }
       const rect = rectangle(start, end);
       if (action === 'fill-rect') {
         for (let y = rect.y; y < rect.y + rect.h; y++) {
@@ -945,6 +967,7 @@
     function paintAttributeShape(action, start, end) {
       const a = cellPoint(start), b = cellPoint(end);
       if (action === 'line') { cellLine(a, b); return; }
+      if (action === 'ellipse') { ellipseOutline(a, b, cellLine); return; }
       const rect = rectangle(a, b);
       if (action === 'fill-rect') {
         for (let y = rect.y; y < rect.y + rect.h; y++) {
@@ -993,6 +1016,21 @@
       return { end, length: Math.max(Math.abs(end.x - start.x), Math.abs(end.y - start.y)) + 1,
         unit: 'px' };
     }
+    function ellipseEndpoint(start, raw, shifted, cellMode) {
+      if (!shifted) return raw;
+      const a = cellMode ? cellPoint(start) : start;
+      const b = cellMode ? cellPoint(raw) : raw;
+      const maxX = cellMode ? Math.ceil(W / 8) - 1 : W - 1;
+      const maxY = cellMode ? Math.ceil(H / 8) - 1 : H - 1;
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const sx = Math.sign(dx) || (maxX - a.x >= a.x ? 1 : -1);
+      const sy = Math.sign(dy) || (maxY - a.y >= a.y ? 1 : -1);
+      const xRoom = sx > 0 ? maxX - a.x : a.x;
+      const yRoom = sy > 0 ? maxY - a.y : a.y;
+      const radius = Math.min(Math.max(Math.abs(dx), Math.abs(dy)), xRoom, yRoom);
+      const end = { x: a.x + sx * radius, y: a.y + sy * radius };
+      return cellMode ? { x: end.x * 8, y: end.y * 8 } : end;
+    }
     function previewPolyline(raw, shifted, clientX, clientY) {
       if (!lineSession) return;
       const index = layers.indexOf(lineSession.layer);
@@ -1036,12 +1074,14 @@
       lineSession.start = end;
       previewPolyline(end, false, clientX, clientY);
     }
-    function previewRectangle(end, clientX, clientY) {
+    function previewRectangle(raw, shifted, clientX, clientY) {
       if (!rectangleSession) return;
       const index = layers.indexOf(rectangleSession.layer);
       if (index < 0) { stopRectangleSession(); return; }
-      rectangleSession.raw = end;
+      rectangleSession.raw = raw;
       rectangleSession.pointer = { x: clientX, y: clientY };
+      const end = rectangleSession.action === 'ellipse'
+        ? ellipseEndpoint(rectangleSession.start, raw, shifted, rectangleSession.attrMode) : raw;
       const layer = layers[index];
       const previewLayer = { ...layer, bitmap: layer.bitmap.slice(), attrs: layer.attrs.slice(), mask: layer.mask.slice() };
       withLayer(index, previewLayer, () => {
@@ -1062,13 +1102,13 @@
     function refreshRectangle() {
       if (!rectangleSession?.raw || !rectangleSession.pointer) return;
       rectangleSession.attrMode = attrMode && !rectangleSession.forceErase;
-      previewRectangle(rectangleSession.raw, rectangleSession.pointer.x, rectangleSession.pointer.y);
+      previewRectangle(rectangleSession.raw, shiftHeld, rectangleSession.pointer.x, rectangleSession.pointer.y);
     }
-    function clickRectangle(p, forceErase, clientX, clientY) {
+    function clickRectangle(p, forceErase, shifted, clientX, clientY) {
       if (!rectangleSession) {
         rectangleSession = { layer: active(), action: tool, start: p, forceErase,
           attrMode: attrMode && !forceErase, on: !forceErase };
-        previewRectangle(p, clientX, clientY);
+        previewRectangle(p, shifted, clientX, clientY);
         return true;
       }
       if (forceErase) {
@@ -1078,10 +1118,12 @@
       }
       const index = layers.indexOf(rectangleSession.layer);
       if (index < 0) { stopRectangleSession(); return false; }
+      const end = rectangleSession.action === 'ellipse'
+        ? ellipseEndpoint(rectangleSession.start, p, shifted, rectangleSession.attrMode) : p;
       remember();
       withLayer(index, layers[index], () => {
-        if (rectangleSession.attrMode) paintAttributeShape(rectangleSession.action, rectangleSession.start, p);
-        else paintShape(rectangleSession.action, rectangleSession.start, p, rectangleSession.on);
+        if (rectangleSession.attrMode) paintAttributeShape(rectangleSession.action, rectangleSession.start, end);
+        else paintShape(rectangleSession.action, rectangleSession.start, end, rectangleSession.on);
       });
       stopRectangleSession();
       return false;
@@ -1185,11 +1227,11 @@
       if (dx * dx + dy * dy >= 9) shapePress.moved = true;
     }
     screen.addEventListener('contextmenu', event => {
-      if (tool === 'draw' || tool === 'rect' || tool === 'fill-rect') event.preventDefault();
+      if (tool === 'draw' || tool === 'rect' || tool === 'fill-rect' || tool === 'ellipse') event.preventDefault();
     });
     screen.addEventListener('pointerdown', event => {
       if (shapePress) return;
-      const forceErase = event.button === 2 && (tool === 'draw' || tool === 'rect' || tool === 'fill-rect');
+      const forceErase = event.button === 2 && (tool === 'draw' || tool === 'rect' || tool === 'fill-rect' || tool === 'ellipse');
       if (event.button !== 0 && !forceErase) return;
       const p = point(event); if (!inside(p.x, p.y)) return;
       if (forceErase) event.preventDefault();
@@ -1214,10 +1256,10 @@
         if (lineSession) beginShapePress('line', event);
         return;
       }
-      if (tool === 'rect' || tool === 'fill-rect') {
+      if (tool === 'rect' || tool === 'fill-rect' || tool === 'ellipse') {
         if (previousSelection && !finalizedPending) remember(previousSelection);
         event.preventDefault();
-        if (clickRectangle(p, forceErase, event.clientX, event.clientY)) beginShapePress('rectangle', event);
+        if (clickRectangle(p, forceErase, event.shiftKey || shiftHeld, event.clientX, event.clientY)) beginShapePress('rectangle', event);
         return;
       }
       if (drawingTools.has(tool) && !finalizedPending) remember(previousSelection);
@@ -1249,7 +1291,7 @@
       }
       if (rectangleSession) {
         const raw = point(event), p = { x: clamp(raw.x, W - 1), y: clamp(raw.y, H - 1) };
-        previewRectangle(p, event.clientX, event.clientY);
+        previewRectangle(p, event.shiftKey || shiftHeld, event.clientX, event.clientY);
         return;
       }
       if (!drag) return;
@@ -1288,7 +1330,7 @@
             clickPolyline(p, event.shiftKey || shiftHeld, event.clientX, event.clientY);
             stopLineSession();
           } else if (press.kind === 'rectangle' && rectangleSession) {
-            clickRectangle(p, false, event.clientX, event.clientY);
+            clickRectangle(p, false, event.shiftKey || shiftHeld, event.clientX, event.clientY);
           }
         }
         return;
@@ -1678,14 +1720,14 @@
     document.addEventListener('keydown', event => {
       if (event.code === 'ShiftLeft' || event.code === 'ShiftRight') {
         shiftHeld = true;
-        refreshPolyline();
+        refreshPolyline(); refreshRectangle();
         if (drag?.action === 'select' && drag.raw && drag.pointer) previewSelection(drag.raw, true, drag.pointer.x, drag.pointer.y);
       }
     }, true);
     document.addEventListener('keyup', event => {
       if (event.code === 'ShiftLeft' || event.code === 'ShiftRight') {
         shiftHeld = false;
-        refreshPolyline();
+        refreshPolyline(); refreshRectangle();
         if (drag?.action === 'select' && drag.raw && drag.pointer) previewSelection(drag.raw, false, drag.pointer.x, drag.pointer.y);
       }
     }, true);
@@ -1752,7 +1794,8 @@
         chooseColor(event.shiftKey ? 'paper' : 'ink', 8); return;
       }
       const shortcuts = {
-        KeyB: () => setTool('draw'), KeyD: () => setTool('line'), KeyR: () => setTool('rect'), KeyF: () => setTool('fill-rect'), KeyS: () => setTool('select'),
+        KeyB: () => setTool('draw'), KeyD: () => setTool('line'), KeyR: () => setTool('rect'), KeyF: () => setTool('fill-rect'),
+        KeyE: () => setTool('ellipse'), KeyS: () => setTool('select'),
         KeyM: () => setTool('move-layer'), KeyA: () => attrModeButton.click(), KeyT: () => setTool('text'),
         KeyN: newDocument,
         KeyI: () => document.querySelector('#swap').click(),
