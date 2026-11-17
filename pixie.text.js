@@ -191,8 +191,12 @@ window.PIXIE_TEXT_UI = (() => {
       textFont.blur();
       event.stopPropagation();
     });
-    for (const control of [textSize, textBold, textItalic])
-      control.addEventListener('input', previewText);
+    const textSizeValue = document.querySelector('#text-size-value');
+    textSize.addEventListener('input', () => {
+      textSizeValue.textContent = textSize.value;
+      previewText();
+    });
+    for (const control of [textBold, textItalic]) control.addEventListener('input', previewText);
     textLocalFonts.hidden = typeof window.queryLocalFonts !== 'function';
     textLocalFonts.addEventListener('click', async () => {
       try {
