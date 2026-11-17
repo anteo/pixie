@@ -365,9 +365,10 @@
           select: () => {
             if (layerSort.suppressClick || activeLayer === index) return;
             stopLineSession(); stopRectangleSession();
-            if (selection) remember();
+            if (selection || pendingMove) remember();
+            if (pendingMove && !tracePreview) finishPendingMove();
             activeLayer = index;
-            if (pendingMove) pendingMove.targetLayer = index;
+            if (tracePreview && pendingMove) pendingMove.targetLayer = index;
             for (const item of list.children) item.classList.toggle('active', Number(item.dataset.index) === index);
             document.querySelector('#layer-up').disabled = activeLayer === layers.length - 1;
             document.querySelector('#layer-down').disabled = activeLayer === 0;
@@ -567,10 +568,11 @@
     function addLayer() {
       stopLineSession(); stopRectangleSession();
       remember();
+      if (pendingMove && !tracePreview) finishPendingMove();
       const number = layers.length + 1;
       layers.push(emptyLayer(tr('Layer {number}', { number })));
       activeLayer = layers.length - 1;
-      if (pendingMove) pendingMove.targetLayer = activeLayer;
+      if (tracePreview && pendingMove) pendingMove.targetLayer = activeLayer;
       renderLayerList(); if (tracePreview) updateFloatingTrace(); else render();
     }
     function moveLayerStack(step) {
@@ -595,7 +597,9 @@
       const selected = active();
       const moveSource = pendingMove?.sourceLayer != null ? layers[pendingMove.sourceLayer] : null;
       const moveTarget = pendingMove ? layers[pendingMove.targetLayer] : null;
-      remember(); layers.splice(index, 1);
+      remember();
+      if (removed === selected && pendingMove && !tracePreview) finishPendingMove();
+      layers.splice(index, 1);
       activeLayer = removed === selected ? Math.min(index, layers.length - 1) : layers.indexOf(selected);
       if (pendingMove) {
         const sourceIndex = moveSource && moveSource !== removed ? layers.indexOf(moveSource) : -1;
