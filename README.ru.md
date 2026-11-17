@@ -1,4 +1,4 @@
-# ![Иконка Pixie](pixie.png) Pixie
+# <img src="docs/images/readme-icon.svg" alt="" width="48" height="48"> Pixie
 
 **Графический редактор экранов ZX Spectrum, работающий в браузере.**
 
