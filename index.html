@@ -202,6 +202,19 @@
     </div><div id="reference-list"></div>
     </div>
     <div id="background-panel"><strong>Background</strong><div id="background-swatches" role="group" aria-label="Background color"></div></div>
+    <div id="text-settings" hidden><strong class="text-title" data-i18n="Font">Font</strong>
+      <label class="trace-control"><span class="visually-hidden" data-i18n="Font">Font</span><input id="text-font" type="text" list="text-font-list" value="ZX ROM" autocomplete="off" spellcheck="false"></label>
+      <datalist id="text-font-list">
+        <option value="ZX ROM" data-i18n="ZX ROM">ZX ROM</option>
+        <option value="sans-serif" data-i18n="Sans-serif">Sans-serif</option>
+        <option value="serif" data-i18n="Serif">Serif</option>
+        <option value="monospace" data-i18n="Monospace">Monospace</option>
+      </datalist>
+      <button id="text-local-fonts" type="button" data-i18n="List installed fonts">List installed fonts</button>
+      <label id="text-size-row" class="trace-control" hidden><span data-i18n="Size (px)">Size (px)</span><input id="text-size" type="number" min="4" max="96" value="16"></label>
+      <label id="text-bold-row" class="trace-toggle" hidden><input id="text-bold" type="checkbox"> <span data-i18n="Bold">Bold</span></label>
+      <label id="text-italic-row" class="trace-toggle" hidden><input id="text-italic" type="checkbox"> <span data-i18n="Italic">Italic</span></label>
+    </div>
     <div id="trace-settings" hidden><strong class="trace-title" data-i18n="Tracing">Tracing</strong>
         <div class="trace-actions"><button id="trace-apply" type="button" data-i18n="Apply">Apply</button><button id="trace-cancel" type="button" data-i18n="Cancel">Cancel</button></div>
         <label class="trace-control"><span><span data-i18n="Brightness">Brightness</span><output>0</output></span><input data-trace="brightness" type="range" min="-100" max="100" value="0"></label>

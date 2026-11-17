@@ -174,8 +174,8 @@
   .layers-heading .icon-button { width: 27px; height: 27px; padding: 4px; }
   .layers-heading .icon { width: 17px; height: 17px; }
   #layer-list { display: flex; flex: none; flex-direction: column; gap: 4px; }
-  #background-panel { display: grid; flex: none; gap: 8px; margin-top: 4px; }
-  .layers-heading strong, #background-panel strong, .references-heading strong, .trace-title { font-size: 17px; }
+  #background-panel { display: grid; flex: none; gap: 8px; margin-top: 4px; margin-bottom: 8px; }
+  .layers-heading strong, #background-panel strong, .references-heading strong, .trace-title, .text-title { font-size: 17px; }
   #background-swatches { display: grid; grid-template-columns: repeat(9, minmax(0, 1fr)); gap: 3px; }
   #background-swatches .swatch { width: 100%; min-width: 0; height: 20px; }
   .layer-row { display: flex; align-items: center; gap: 5px; min-width: 0; padding: 5px; border: 1px solid #4d515b; border-radius: 5px; cursor: grab; user-select: none; touch-action: none; }
@@ -214,6 +214,13 @@
   .reference-opacity output { width: 4ch; text-align: right; font: 11px ui-monospace, monospace; }
   #trace-settings { flex: none; margin-top: 4px; }
   #trace-settings[hidden] { display: none; }
+  #text-settings { display: grid; flex: none; gap: 8px; margin-top: 4px; }
+  #text-settings[hidden], #text-local-fonts[hidden], #text-bold-row[hidden], #text-italic-row[hidden] { display: none; }
+  #text-settings .trace-control, #text-settings .trace-toggle { margin-top: 0; }
+  #text-font { box-sizing: border-box; margin-top: 0; padding: 4px 5px; color: #eee; background: #30343e; border: 1px solid #5b606b; border-radius: 4px; }
+  #text-local-fonts { padding: 5px 8px; font-size: 12px; }
+  .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+  #text-size { box-sizing: border-box; padding: 4px 5px; color: #eee; background: #30343e; border: 1px solid #5b606b; border-radius: 4px; }
   .trace-title { display: block; }
   .trace-actions { display: flex; gap: 6px; margin-top: 8px; }
   .trace-actions button { flex: 1; }

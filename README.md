@@ -21,7 +21,7 @@ Pixie lets you draw at individual pixel resolution while seeing how the result w
 - **Ellipses.** Draw an outline with two clicks or one drag; hold Shift for a circle. The selected brush width applies to the outline.
 - **Flood fill.** Fill a connected region of the active layer, using its pixel colors and transparency as boundaries.
 - **Brush size.** Use a shared 1–8 pixel width for the drawing tools.
-- **Text.** Type directly on the canvas using the ZX ROM font. Hold Shift when placing text to align its start to an 8×8 cell.
+- **Text.** Choose the ZX ROM font or render a browser font into pixels. You can request the installed font list where the browser supports it, or enter a font family manually. Enter creates a floating selection that you can move or resize before applying. Hold Shift when placing text to align its start to an 8×8 cell.
 - **INK and PAPER.** Choose colors from swatches and switch BRIGHT on or off.
 - **Attribute painting.** Apply the brush, line, rectangle, ellipse, or fill tools to whole 8×8 attribute cells without changing the selected tool.
 - **Transparency.** Use transparent INK or PAPER and per-pixel layer masks to reveal artwork below. Drawing with transparent PAPER preserves existing paper pixels and their color.

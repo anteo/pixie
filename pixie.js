@@ -112,6 +112,13 @@
     const ctx = screen.getContext('2d');
     const textEntry = document.querySelector('#text-entry');
     const textPreview = document.querySelector('#text-preview').getContext('2d');
+    const textSettingsPanel = document.querySelector('#text-settings');
+    const textFont = document.querySelector('#text-font');
+    const textFontList = document.querySelector('#text-font-list');
+    const textLocalFonts = document.querySelector('#text-local-fonts');
+    const textSize = document.querySelector('#text-size');
+    const textBold = document.querySelector('#text-bold');
+    const textItalic = document.querySelector('#text-italic');
     const stage = document.querySelector('#stage'), viewport = document.querySelector('#viewport'), status = document.querySelector('#status');
     const inkSwatches = document.querySelector('#ink-swatches'), paperSwatches = document.querySelector('#paper-swatches');
     const brightControl = document.querySelector('#bright'), gridControl = document.querySelector('#grid');
@@ -1489,6 +1496,7 @@
       if (rectangleSession && name !== rectangleSession.action) stopRectangleSession();
       if (name !== 'select' && tracePreview) cancelTrace(false);
       tool = name;
+      textSettingsPanel.hidden = name !== 'text';
       document.querySelectorAll('[data-tool]').forEach(b => b.classList.toggle('active', b.dataset.tool === name));
       updateCanvasCursor();
       const tips = {
@@ -1500,7 +1508,7 @@
         fill: 'Fill a connected area on the active layer.',
         select: 'Select an area; drag its edges to resize the image, holding Shift for 8×8 sizes. Arrows move it by 1 pixel, Shift+arrows to the next cell boundary.',
         'move-layer': 'Drag the canvas to move the active layer.',
-        text: 'Click the canvas and type. Enter commits; Escape cancels.',
+        text: 'Click the canvas and type. Enter creates a movable selection; Escape cancels.',
       };
       note(tr(tips[name]));
     }
@@ -2002,51 +2010,114 @@
       drawOverlay(size);
       showShapeMeasure(`${size.w}×${size.h} px`, clientX, clientY);
     }
-    function drawText(p, value) {
-      if (!value) return;
-      remember();
-      const originalIndex = activeLayer, targetIndex = layers.indexOf(p.layer);
-      if (targetIndex >= 0) activeLayer = targetIndex;
-      try {
+    const chosenTextFont = () => textFont.value.trim() || textFont.dataset.previousFont || 'ZX ROM';
+    function selectedTextFamily() {
+      return chosenTextFont();
+    }
+    const isRomFont = () => /^zx rom$/i.test(chosenTextFont());
+    function textFontSpec() {
+      const size = Math.max(4, Math.min(96, Number(textSize.value) || 16));
+      const family = selectedTextFamily();
+      const cssFamily = ['sans-serif', 'serif', 'monospace'].includes(family.toLowerCase())
+        ? family.toLowerCase() : JSON.stringify(family);
+      return { size, face: `${textItalic.checked ? 'italic ' : ''}${textBold.checked ? 'bold ' : ''}${size}px ${cssFamily}, sans-serif` };
+    }
+    function textLineMetrics(context, size) {
+      const sample = context.measureText('Mg|Др');
+      const ascent = Math.ceil(Math.max(size, sample.fontBoundingBoxAscent || sample.actualBoundingBoxAscent || 0)) + 1;
+      const descent = Math.ceil(Math.max(size * 0.3,
+        sample.fontBoundingBoxDescent || sample.actualBoundingBoxDescent || 0)) + 1;
+      return { ascent, h: Math.min(160, ascent + descent) };
+    }
+    function textCursorHeight() {
+      if (isRomFont()) return 8;
+      const { size, face } = textFontSpec();
+      const context = document.createElement('canvas').getContext('2d');
+      context.font = face;
+      return textLineMetrics(context, size).h;
+    }
+    function rasterizeText(value) {
+      if (!value) return null;
+      if (isRomFont()) {
+        const w = value.length * 8, h = 8, bits = new Uint8Array(w * h);
         for (let n = 0; n < value.length; n++) {
           const code = value.charCodeAt(n);
           if (code < 32 || code > 127) continue;
-          for (let row = 0; row < 8; row++) for (let col = 0; col < 8; col++) {
-            const x = p.x + n * 8 + col, y = p.y + row;
-            const on = !!(font[(code - 32) * 8 + row] & (128 >> col));
-            if (!on && paperTransparent) continue;
-            if (on && inkTransparent) { setBit(x, y, false, false); continue; }
-            const attribute = drawingAttr(x, y);
-            setBit(x, y, on);
-            setAttr(x, y, attribute);
-          }
+          for (let row = 0; row < 8; row++) for (let col = 0; col < 8; col++)
+            bits[row * w + n * 8 + col] = !!(font[(code - 32) * 8 + row] & (128 >> col));
         }
-      } finally { activeLayer = originalIndex; }
+        return { w, h, bits, cursorX: w };
+      }
+      const { size, face } = textFontSpec();
+      const canvas = document.createElement('canvas');
+      const context = canvas.getContext('2d', { willReadFrequently: true });
+      context.font = face;
+      const metrics = context.measureText(value);
+      const left = Math.ceil(Math.max(0, metrics.actualBoundingBoxLeft || 0)) + 1;
+      const { ascent, h } = textLineMetrics(context, size);
+      const cursorX = Math.min(2047, left + Math.round(metrics.width));
+      const w = Math.min(2048, Math.max(cursorX + 1,
+        Math.ceil(left + Math.max(metrics.width, metrics.actualBoundingBoxRight || 0)) + 1));
+      const scale = w * h < 50000 ? 4 : w * h < 150000 ? 3 : 2;
+      canvas.width = w * scale; canvas.height = h * scale;
+      context.setTransform(scale, 0, 0, scale, 0, 0);
+      context.font = face;
+      context.textBaseline = 'alphabetic';
+      context.fillStyle = '#fff';
+      context.fillText(value, left, ascent);
+      const rgba = context.getImageData(0, 0, canvas.width, canvas.height).data;
+      const bits = new Uint8Array(w * h);
+      const threshold = scale * scale * 255 * 0.45;
+      for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+        let coverage = 0;
+        for (let sy = 0; sy < scale; sy++) for (let sx = 0; sx < scale; sx++)
+          coverage += rgba[((y * scale + sy) * canvas.width + x * scale + sx) * 4 + 3];
+        bits[y * w + x] = coverage >= threshold ? 1 : 0;
+      }
+      return { w, h, bits, cursorX };
+    }
+    function textPixels(value) {
+      const mask = rasterizeText(value);
+      if (!mask) return null;
+      const count = mask.w * mask.h;
+      const colors = new Uint8Array(count).fill(activeAttr());
+      const opacity = new Uint8Array(count);
+      for (let i = 0; i < count; i++) opacity[i] = mask.bits[i] ? !inkTransparent : !paperTransparent;
+      return { ...mask, colors, opacity };
+    }
+    function drawText(p, value) {
+      const data = textPixels(value);
+      if (!data) return;
+      finishPendingMove();
+      remember();
+      const target = { x: p.x, y: p.y, w: data.w, h: data.h };
+      selection = { ...target };
+      const targetIndex = layers.indexOf(p.layer);
+      pendingMove = { source: null, data, target, sourceLayer: null,
+        targetLayer: targetIndex >= 0 ? targetIndex : activeLayer };
+      setTool('select');
       render();
+      note(tr('Floating text. Move or resize it, then deselect to apply.'));
     }
     function previewText() {
       textPreview.clearRect(0, 0, W, H);
       if (!textSession) return;
-      const value = textEntry.value;
+      const data = textPixels(textEntry.value);
       const palette = brightEnabled ? bright : normal;
-      for (let n = 0; n < value.length; n++) {
-        const code = value.charCodeAt(n);
-        if (code < 32 || code > 127) continue;
+      if (data) {
         if (!paperTransparent) {
           textPreview.fillStyle = palette[paper];
-          textPreview.fillRect(textSession.x + n * 8, textSession.y, 8, 8);
+          textPreview.fillRect(textSession.x, textSession.y, data.w, data.h);
         }
-        if (inkTransparent) continue;
-        textPreview.fillStyle = palette[ink];
-        for (let row = 0; row < 8; row++) {
-          const bits = font[(code - 32) * 8 + row];
-          for (let col = 0; col < 8; col++) {
-            if (bits & (128 >> col)) textPreview.fillRect(textSession.x + n * 8 + col, textSession.y + row, 1, 1);
-          }
+        if (!inkTransparent) {
+          textPreview.fillStyle = palette[ink];
+          for (let y = 0; y < data.h; y++) for (let x = 0; x < data.w; x++)
+            if (data.bits[y * data.w + x]) textPreview.fillRect(textSession.x + x, textSession.y + y, 1, 1);
         }
       }
       textPreview.fillStyle = '#ff40ff';
-      textPreview.fillRect(textSession.x + value.length * 8, textSession.y, 1, 8);
+      textPreview.fillRect(textSession.x + (data?.cursorX || 0), textSession.y, 1,
+        data?.h || textCursorHeight());
     }
     function commitText() {
       if (!textSession) return;
@@ -2064,9 +2135,11 @@
       textEntry.focus({ preventScroll: true }); previewText();
     }
     textEntry.addEventListener('input', () => {
-      const clean = textEntry.value.replace(/[^\x20-\x7f]/g, '');
-      if (clean !== textEntry.value) {
-        textEntry.value = clean; note(tr('The ZX ROM font supports ASCII characters only.'));
+      if (isRomFont()) {
+        const clean = textEntry.value.replace(/[^\x20-\x7f]/g, '');
+        if (clean !== textEntry.value) {
+          textEntry.value = clean; note(tr('The ZX ROM font supports ASCII characters only.'));
+        }
       }
       previewText();
     });
@@ -2074,8 +2147,76 @@
       if (event.key === 'Enter') { event.preventDefault(); event.stopPropagation(); commitText(); }
       if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); cancelText(); }
     });
+    function updateTextControls() {
+      const rom = isRomFont();
+      document.querySelector('#text-size-row').hidden = rom;
+      document.querySelector('#text-bold-row').hidden = rom;
+      document.querySelector('#text-italic-row').hidden = rom;
+      if (rom && textSession) {
+        const clean = textEntry.value.replace(/[^\x20-\x7f]/g, '');
+        if (clean !== textEntry.value) {
+          textEntry.value = clean;
+          note(tr('The ZX ROM font supports ASCII characters only.'));
+        }
+      }
+      previewText();
+    }
+    textFont.addEventListener('focus', () => {
+      textFont.dataset.previousFont = textFont.value;
+      textFont.value = '';
+    });
+    textFont.addEventListener('pointerdown', () => {
+      if (document.activeElement !== textFont || !textFont.value) return;
+      textFont.dataset.previousFont = textFont.value;
+      textFont.value = '';
+    });
+    textFont.addEventListener('input', updateTextControls);
+    textFont.addEventListener('blur', () => {
+      textFont.value = textFont.value.trim() || textFont.dataset.previousFont || 'ZX ROM';
+      delete textFont.dataset.previousFont;
+      updateTextControls();
+    });
+    textFont.addEventListener('keydown', event => {
+      if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+        const fonts = [...new Set([...textFontList.options].map(option => option.value).filter(Boolean))];
+        if (!fonts.length) return;
+        const current = chosenTextFont();
+        const index = fonts.findIndex(font => font.toLowerCase() === current.toLowerCase());
+        const next = index < 0 ? (event.key === 'ArrowDown' ? 0 : fonts.length - 1)
+          : Math.max(0, Math.min(fonts.length - 1, index + (event.key === 'ArrowDown' ? 1 : -1)));
+        textFont.value = fonts[next];
+        updateTextControls();
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+      if (event.key !== 'Escape') return;
+      textFont.value = textFont.dataset.previousFont || 'ZX ROM';
+      textFont.blur();
+      event.stopPropagation();
+    });
+    for (const control of [textSize, textBold, textItalic])
+      control.addEventListener('input', previewText);
+    textLocalFonts.hidden = typeof window.queryLocalFonts !== 'function';
+    textLocalFonts.addEventListener('click', async () => {
+      try {
+        const faces = await window.queryLocalFonts();
+        const families = [...new Set(faces.map(face => face.family).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+        textFontList.querySelectorAll('option[data-local-font]').forEach(option => option.remove());
+        for (const family of families) {
+          const option = new Option(family, family);
+          option.dataset.localFont = '';
+          textFontList.append(option);
+        }
+        textLocalFonts.hidden = true;
+        note(tr('{count} installed font families available.', { count: families.length }));
+      } catch {
+        note(tr('Font access was denied or is unavailable here. Enter a font family manually.'));
+      }
+    });
+    updateTextControls();
     document.addEventListener('click', event => {
-      if (!textSession || event.target === textEntry || event.target.closest('#viewport')) return;
+      if (!textSession || event.target === textEntry || event.target.closest('#viewport, #text-settings')) return;
       if (document.querySelector('dialog[open]')) return;
       if (event.target.closest('#new, #open, #open-project, #save, #save-project, #save-png')) return;
       textEntry.focus({ preventScroll: true });
