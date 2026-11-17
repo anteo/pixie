@@ -73,7 +73,7 @@
       refreshPolyline(); refreshRectangle();
     }
     let tool = 'draw', attrMode = false, zoom = 6, selection = null, drag = null, clipboard = null;
-    let lineSession = null, rectangleSession = null, shapePress = null;
+    let lineSession = null, rectangleSession = null, shapePress = null, textDrag = null;
     let pendingMove = null;
     const attrModeButton = document.querySelector('#attr-mode');
     attrModeButton.onclick = () => {
@@ -794,6 +794,10 @@
         screen.style.cursor = hit === 'move' ? (traceDrag ? 'grabbing' : 'grab') : resize[hit] || 'crosshair';
         return;
       }
+      if (tool === 'text' && textUI.session && (textDrag || p && textUI.textHandleHit(p))) {
+        screen.style.cursor = textDrag ? 'grabbing' : 'grab';
+        return;
+      }
       const resize = { n: 'ns-resize', s: 'ns-resize', e: 'ew-resize', w: 'ew-resize',
         nw: 'nwse-resize', se: 'nwse-resize', ne: 'nesw-resize', sw: 'nesw-resize' };
       const handle = drag?.action === 'resize' ? drag.handle
@@ -820,7 +824,7 @@
         fill: 'Fill a connected area.',
         select: 'Select, move, or resize; Shift snaps to 8×8 cells.',
         'move-layer': 'Drag to move; Shift snaps to 8×8 cells.',
-        text: 'Click to type; Shift snaps, Enter floats text.',
+        text: 'Click to type; Shift snaps, drag the line to move; Enter applies text.',
       };
       note(tr(tips[name]));
     }
@@ -1069,6 +1073,14 @@
       return false;
     }
     function cancelDrawingGesture() {
+      if (textDrag) {
+        const current = textDrag;
+        textDrag = null;
+        if (screen.hasPointerCapture(current.pointerId)) screen.releasePointerCapture(current.pointerId);
+        textUI.moveTextTo(current.origin.x, current.origin.y);
+        updateCanvasCursor();
+        return true;
+      }
       if (lineSession || rectangleSession) {
         const pointerId = shapePress?.pointerId;
         if (lineSession) stopLineSession();
@@ -1103,14 +1115,11 @@
       if (!data) return;
       finishPendingMove();
       remember();
-      const target = { x: p.x, y: p.y, w: data.w, h: data.h };
-      selection = { ...target };
       const targetIndex = layers.indexOf(p.layer);
-      pendingMove = { source: null, data, target, sourceLayer: null,
-        targetLayer: targetIndex >= 0 ? targetIndex : activeLayer };
-      setTool('select');
+      const index = targetIndex >= 0 ? targetIndex : activeLayer;
+      withLayer(index, layers[index], () => stamp(data, p.x, p.y));
+      selection = null;
       render();
-      note(tr('Text ready. Move, resize, or apply it.'));
     }
     const textUI = window.PIXIE_TEXT_UI.create({
       tr, note, textEntry, textPreview, textFont, textFontList, textLocalFonts,
@@ -1121,6 +1130,18 @@
       onPreview: () => navigatorUi?.drawNavigator(),
     });
     const { previewText, commitText, cancelText, startText } = textUI;
+    function moveTextDrag(event) {
+      if (!textDrag || event.pointerId !== textDrag.pointerId) return false;
+      const raw = point(event);
+      const p = { x: clamp(raw.x, W - 1), y: clamp(raw.y, H - 1) };
+      const snap = event.shiftKey || shiftHeld;
+      let x = textDrag.origin.x + p.x - textDrag.start.x;
+      let y = textDrag.origin.y + p.y - textDrag.start.y;
+      if (snap) { x = Math.round(x / 8) * 8; y = Math.round(y / 8) * 8; }
+      textUI.moveTextTo(clamp(x, W - 1), clamp(y, H - 1));
+      updateCanvasCursor(p);
+      return true;
+    }
     document.addEventListener('click', event => {
       if (!textUI.session || event.target === textEntry || event.target.closest('#viewport, #text-settings, #panel-resizer')) return;
       if (document.querySelector('dialog[open]')) return;
@@ -1208,6 +1229,21 @@
       const p = point(event); if (!inside(p.x, p.y)) return;
       if (tool === 'text' && textUI.session) {
         event.preventDefault();
+        if (textUI.textHandleHit(p)) {
+          textDrag = { pointerId: event.pointerId, start: p,
+            origin: { x: textUI.session.x, y: textUI.session.y } };
+          screen.setPointerCapture(event.pointerId);
+          updateCanvasCursor(p);
+          return;
+        }
+        if (textUI.focusTextAt(p)) return;
+        if (!textEntry.value) {
+          const position = event.shiftKey || shiftHeld
+            ? { x: p.x & ~7, y: p.y & ~7 } : p;
+          startText(position);
+          updateCanvasCursor(p);
+          return;
+        }
         commitText();
         if (tool === 'text') setTool('select');
         updateCanvasCursor(p);
@@ -1293,6 +1329,7 @@
       if (drag.action === 'select') previewSelection(p, event.shiftKey || shiftHeld, event.clientX, event.clientY);
     });
     screen.addEventListener('pointermove', event => {
+      if (moveTextDrag(event)) return;
       if (traceDrag) { moveTraceDrag(event); return; }
       updateShapePress(event);
       if (lineSession) {
@@ -1330,6 +1367,12 @@
     screen.addEventListener('pointermove', updateCursor);
     screen.addEventListener('pointerleave', () => { cursorPoint = null; paintCursor(); updateCanvasCursor(null); });
     screen.addEventListener('pointerup', event => {
+      if (moveTextDrag(event)) {
+        textDrag = null;
+        textEntry.focus({ preventScroll: true });
+        updateCursor(event);
+        return;
+      }
       if (finishTraceDrag(event)) return;
       if (shapePress?.pointerId === event.pointerId) {
         updateShapePress(event);
@@ -1395,6 +1438,13 @@
       updateCursor(event);
     });
     screen.addEventListener('pointercancel', event => {
+      if (textDrag?.pointerId === event.pointerId) {
+        const origin = textDrag.origin;
+        textDrag = null;
+        textUI.moveTextTo(origin.x, origin.y);
+        updateCanvasCursor();
+        return;
+      }
       if (finishTraceDrag(event, true)) return;
       if (shapePress) {
         if (shapePress.kind === 'line') stopLineSession();
@@ -1733,6 +1783,7 @@
     }, true);
     window.addEventListener('blur', () => {
       shiftHeld = false; hideShapeMeasure();
+      if (textDrag) cancelDrawingGesture();
       if (drag?.sprayTimer) { clearInterval(drag.sprayTimer); drag.sprayTimer = null; }
     });
     document.addEventListener('keydown', event => {

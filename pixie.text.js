@@ -21,6 +21,21 @@ window.PIXIE_TEXT = (() => {
     context.font = face;
     return textLineMetrics(context, size).h;
   }
+  function textCursorIndex(value, x, options) {
+    if (/^zx rom$/i.test(options.family))
+      return Math.max(0, Math.min(value.length, Math.round(x / 8)));
+    const { face } = textFontSpec(options);
+    const context = document.createElement('canvas').getContext('2d');
+    context.font = face;
+    const left = Math.ceil(Math.max(0, context.measureText(value).actualBoundingBoxLeft || 0)) + 1;
+    let nearest = 0, distance = Infinity;
+    for (let index = 0; index <= value.length; index++) {
+      const caret = left + Math.round(context.measureText(value.slice(0, index)).width);
+      const nextDistance = Math.abs(caret - x);
+      if (nextDistance < distance) { nearest = index; distance = nextDistance; }
+    }
+    return nearest;
+  }
   function rasterizeText(value, caretIndex, options) {
     if (!value) return null;
     if (/^zx rom$/i.test(options.family)) {
@@ -62,13 +77,13 @@ window.PIXIE_TEXT = (() => {
     }
     return { w, h, bits, cursorX };
   }
-  return { rasterize: rasterizeText, cursorHeight: textCursorHeight };
+  return { rasterize: rasterizeText, cursorHeight: textCursorHeight, cursorIndex: textCursorIndex };
 })();
 
 window.PIXIE_TEXT_UI = (() => {
   function create({ tr, note, textEntry, textPreview, textFont, textFontList, textLocalFonts,
     textSize, textBold, textItalic, getActiveLayer, drawText, getSize, getDrawState, onPreview }) {
-    let textSession = null;
+    let textSession = null, dragHandle = null;
     const chosenTextFont = () => textFont.value.trim() || textFont.dataset.previousFont || 'ZX ROM';
     const isRomFont = () => /^zx rom$/i.test(chosenTextFont());
     const textRasterOptions = () => ({
@@ -92,7 +107,7 @@ window.PIXIE_TEXT_UI = (() => {
       const { W, H } = getSize();
       const { brightEnabled, bright, normal, ink, paper, inkTransparent, paperTransparent } = getDrawState();
       textPreview.clearRect(0, 0, W, H);
-      if (!textSession) { onPreview?.(); return; }
+      if (!textSession) { dragHandle = null; onPreview?.(); return; }
       const caretIndex = textEntry.selectionDirection === 'backward'
         ? textEntry.selectionStart : textEntry.selectionEnd;
       const data = textPixels(textEntry.value, caretIndex ?? textEntry.value.length);
@@ -111,6 +126,11 @@ window.PIXIE_TEXT_UI = (() => {
       textPreview.fillStyle = '#ff40ff';
       textPreview.fillRect(textSession.x + (data?.cursorX || 0), textSession.y, 1,
         data?.h || textCursorHeight());
+      const textHeight = data?.h || textCursorHeight();
+      const handleY = textSession.y + textHeight + 2 < H
+        ? textSession.y + textHeight + 2 : Math.max(0, textSession.y - 3);
+      dragHandle = { x: textSession.x, y: handleY, w: Math.max(8, data?.w || 0) };
+      textPreview.fillRect(dragHandle.x, dragHandle.y, dragHandle.w, 1);
       onPreview?.();
     }
     function commitText() {
@@ -127,6 +147,28 @@ window.PIXIE_TEXT_UI = (() => {
     function startText(p) {
       commitText(); textSession = { x: p.x, y: p.y, layer: getActiveLayer() };
       textEntry.focus({ preventScroll: true }); previewText();
+    }
+    function focusTextAt(point) {
+      if (!textSession) return false;
+      const data = rasterizeText(textEntry.value);
+      const width = Math.max(8, data?.w || 0);
+      const height = data?.h || textCursorHeight();
+      if (point.x < textSession.x || point.x >= textSession.x + width ||
+          point.y < textSession.y || point.y >= textSession.y + height) return false;
+      textEntry.focus({ preventScroll: true });
+      const index = window.PIXIE_TEXT.cursorIndex(textEntry.value, point.x - textSession.x, textRasterOptions());
+      textEntry.setSelectionRange(index, index);
+      previewText();
+      return true;
+    }
+    function textHandleHit(point) {
+      return !!dragHandle && point.x >= dragHandle.x && point.x < dragHandle.x + dragHandle.w &&
+        Math.abs(point.y - dragHandle.y) <= 2;
+    }
+    function moveTextTo(x, y) {
+      if (!textSession) return;
+      textSession.x = x; textSession.y = y;
+      previewText();
     }
     textEntry.addEventListener('input', () => {
       if (isRomFont()) {
@@ -215,7 +257,8 @@ window.PIXIE_TEXT_UI = (() => {
       }
     });
     updateTextControls();
-    return { get session() { return textSession; }, textPixels, previewText, commitText, cancelText, startText };
+    return { get session() { return textSession; }, textPixels, previewText, commitText, cancelText,
+      startText, focusTextAt, textHandleHit, moveTextTo };
   }
   return { create };
 })();

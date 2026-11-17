@@ -24,7 +24,7 @@ Click a preview to open it at full size.
 ## What you can do
 
 - **Pixel brush.** Choose a square, round, or spray tip and set its size from 1 to 64 pixels. Draw or erase depending on the first pixel touched; a drag continues that action.
-- **Text.** Rasterize the ZX ROM font or browser fonts into pixels, then move or resize the text before applying it.
+- **Text.** Rasterize the ZX ROM font or browser fonts into pixels. Drag the line beneath the text to position it while typing; Enter creates a floating selection that can be moved or resized before applying it.
 - **ZX attribute preview.** See the combined layers with ZX color limits. Attributes within each layer remain tied to 8×8 cells; the switch affects the composite preview and PNG export.
 - **Layers.** Move, reorder, merge, and manage visibility independently. Artwork can extend beyond the document while editing.
 - **Reference images.** Place images beneath the artwork, then move, resize, reorder, or adjust their opacity without including them in exports.
