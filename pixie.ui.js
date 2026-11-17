@@ -238,23 +238,27 @@ window.PIXIE_SORTABLE = (() => {
 })();
 
 window.PIXIE_PANEL_ROWS = (() => {
-  function layer({ layer, index, active, muted, canDelete, tr, select, toggle, rename, remove }) {
+  function layer({ layer, index, active, muted, canDelete, tr, select,
+    toggleVisibility, toggleSolo, rename, remove }) {
     const row = document.createElement('div');
     row.dataset.index = String(index);
     row.className = 'layer-row' + (active ? ' active' : '') + (muted ? ' solo-muted' : '');
     row.title = tr('Select or drag layer; double-click its name to rename');
     row.onclick = select;
     const eye = document.createElement('button');
-    const state = layer.solo ? 'Solo' : layer.visible ? 'On' : 'Off';
-    const next = layer.solo ? 'On' : layer.visible ? 'Off' : 'Solo';
     eye.type = 'button'; eye.className = 'layer-eye';
-    eye.title = tr('Layer state: {state}; click for {next} (V for active layer)',
-      { state: tr(state), next: tr(next) });
+    eye.title = tr(layer.visible ? 'Hide layer (V for active layer)' : 'Show layer (V for active layer)');
     eye.setAttribute('aria-label', eye.title);
-    eye.setAttribute('aria-pressed', layer.solo ? 'mixed' : String(layer.visible));
-    eye.innerHTML = layer.solo ? '<span class="solo-mark" aria-hidden="true">S</span>'
-      : `<svg class="icon"><use href="#i-eye${layer.visible ? '' : '-off'}"/></svg>`;
-    eye.onclick = event => { event.stopPropagation(); toggle(); };
+    eye.setAttribute('aria-pressed', String(layer.visible));
+    eye.innerHTML = `<svg class="icon"><use href="#i-eye${layer.visible ? '' : '-off'}"/></svg>`;
+    eye.onclick = event => { event.stopPropagation(); toggleVisibility(); };
+    const solo = document.createElement('button');
+    solo.type = 'button'; solo.className = 'layer-solo' + (layer.solo ? ' active' : '');
+    solo.title = tr(layer.solo ? 'Turn off solo (Shift+V for active layer)' : 'Solo layer (Shift+V for active layer)');
+    solo.setAttribute('aria-label', solo.title);
+    solo.setAttribute('aria-pressed', String(layer.solo));
+    solo.innerHTML = '<span aria-hidden="true">S</span>';
+    solo.onclick = event => { event.stopPropagation(); toggleSolo(); };
     const name = document.createElement('span');
     name.className = 'layer-name'; name.textContent = layer.name;
     name.ondblclick = event => { event.stopPropagation(); rename(); };
@@ -267,7 +271,7 @@ window.PIXIE_PANEL_ROWS = (() => {
     removeButton.disabled = !canDelete;
     removeButton.innerHTML = '<svg class="icon"><use href="#i-trash"/></svg>';
     removeButton.onclick = event => { event.stopPropagation(); remove(); };
-    row.append(eye, name, coords, removeButton);
+    row.append(eye, solo, name, coords, removeButton);
     return row;
   }
 

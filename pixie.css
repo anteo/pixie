@@ -203,11 +203,12 @@
   .layer-row.drop-before { box-shadow: inset 0 3px #55dce5; }
   .layer-row.drop-after { box-shadow: inset 0 -3px #55dce5; }
   .layer-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .layer-eye { width: 26px; height: 26px; padding: 4px; display: grid; place-items: center; }
+  .layer-eye, .layer-solo { width: 26px; height: 26px; padding: 4px; display: grid; place-items: center; flex: none; }
   .layer-eye .icon { width: 17px; height: 17px; }
+  .layer-solo { font: 700 15px/1 ui-monospace, monospace; }
+  .layer-row .layer-solo.active { background: #5a2057; border-color: #ff69ed; color: #fff; }
   .layer-row .icon-button { width: 26px; height: 26px; padding: 4px; }
   .layer-row .icon-button .icon { width: 16px; height: 16px; }
-  .layer-eye .solo-mark { font: 700 15px/1 ui-monospace, monospace; }
   .layer-coords { flex: none; color: #aeb6c4; font: 11px ui-monospace, monospace; white-space: nowrap; }
   #references-panel { display: flex; flex: none; flex-direction: column; gap: 8px; margin-top: 4px; }
   .references-heading { display: flex; align-items: center; gap: 4px; }

@@ -71,6 +71,7 @@ The ZX Spectrum can store only one INK/PAPER color pair and one BRIGHT setting p
 | `Alt+1`…`Alt+9`, `Alt+0` | Set zoom; fit the canvas |
 | `Alt+Shift+1`…`Alt+Shift+8` | Set a 1–8 pixel brush size; larger sizes use the slider |
 | `L`, `Shift+L`, `Shift+M` | Add layer, delete layer, merge with layer below |
+| `V`, `Shift+V` | Toggle the active layer's visibility or solo preview |
 | `Cmd/Ctrl+O`, `Cmd/Ctrl+S` | Open or save a Pixie project |
 | `Cmd/Ctrl+Shift+O`, `Cmd/Ctrl+Shift+S` | Import or export SCR |
 

@@ -341,13 +341,16 @@
       rowSelector: '.layer-row', blockedSelector: 'button',
       itemAt: index => layers[index], reorder: reorderLayer,
     });
-    function cycleLayerVisibility(layer) {
+    function toggleLayerVisibility(layer) {
       remember();
-      if (layer.solo) layer.solo = false;
-      else if (layer.visible) layer.visible = false;
-      else {
-        layer.visible = true; layer.solo = true;
-      }
+      layer.visible = !layer.visible;
+      if (!layer.visible) layer.solo = false;
+      renderLayerList(); render();
+    }
+    function toggleLayerSolo(layer) {
+      remember();
+      layer.solo = !layer.solo;
+      if (layer.solo) layer.visible = true;
       renderLayerList(); render();
     }
     function renderLayerList() {
@@ -372,7 +375,8 @@
             document.querySelector('#layer-merge').disabled = !canMergeDown();
             if (tracePreview) updateFloatingTrace(); else render();
           },
-          toggle: () => cycleLayerVisibility(layer),
+          toggleVisibility: () => toggleLayerVisibility(layer),
+          toggleSolo: () => toggleLayerSolo(layer),
           rename: async () => {
             const next = await askName(tr('Layer name'), layer.name, tr('Rename'));
             if (next !== null && next !== layer.name) {
@@ -1897,7 +1901,7 @@
         KeyH: () => brightControl.click(), KeyG: () => gridControl.click(),
         KeyZ: () => zxPreviewControl.click(),
         KeyK: activateTrace,
-        KeyV: () => cycleLayerVisibility(active()),
+        KeyV: () => toggleLayerVisibility(active()),
       };
       if (code === 'KeyL') {
         event.preventDefault();
@@ -1905,6 +1909,7 @@
         return;
       }
       if (code === 'KeyM' && event.shiftKey) { event.preventDefault(); mergeDown(); return; }
+      if (code === 'KeyV' && event.shiftKey) { event.preventDefault(); toggleLayerSolo(active()); return; }
       if (code === 'BracketRight') { event.preventDefault(); moveLayerStack(1); return; }
       if (code === 'BracketLeft') { event.preventDefault(); moveLayerStack(-1); return; }
       if (shortcuts[code]) { event.preventDefault(); shortcuts[code](); return; }
