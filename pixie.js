@@ -413,10 +413,6 @@
       return activeLayer > 0 && active().visible && layers[activeLayer - 1].visible;
     }
     const layerList = document.querySelector('#layer-list');
-    let layerDrag = null, suppressLayerClick = false;
-    function clearDropMarkers(list) {
-      for (const item of list.children) item.classList.remove('drop-before', 'drop-after');
-    }
     function reorderLayer(sourceLayer, targetLayer, before) {
       const source = layers.indexOf(sourceLayer), target = layers.indexOf(targetLayer);
       if (source < 0 || target < 0) return;
@@ -436,55 +432,9 @@
       }
       renderLayerList(); render(); note(tr('Layer order changed.'));
     }
-    layerList.addEventListener('pointerdown', event => {
-      suppressLayerClick = false;
-      if (event.button !== 0 || event.target.closest('button')) return;
-      const row = event.target.closest('.layer-row');
-      if (!row || !layerList.contains(row)) return;
-      layerDrag = { source: layers[Number(row.dataset.index)], pointerId: event.pointerId,
-        x: event.clientX, y: event.clientY, active: false, target: null, before: false };
-    });
-    layerList.addEventListener('pointermove', event => {
-      const move = layerDrag;
-      if (!move || move.pointerId !== event.pointerId) return;
-      if (!move.active) {
-        const dx = event.clientX - move.x, dy = event.clientY - move.y;
-        if (dx * dx + dy * dy < 16) return;
-        move.active = true;
-        layerList.setPointerCapture(event.pointerId);
-        const sourceRow = [...layerList.children].find(row =>
-          layers[Number(row.dataset.index)] === move.source);
-        sourceRow?.classList.add('dragging');
-      }
-      event.preventDefault(); clearDropMarkers(layerList);
-      move.target = null;
-      const bounds = layerList.getBoundingClientRect();
-      if (event.clientX < bounds.left || event.clientX > bounds.right ||
-          event.clientY < bounds.top || event.clientY > bounds.bottom) return;
-      const rows = [...layerList.children];
-      const targetRow = rows.find(item => event.clientY <= item.getBoundingClientRect().bottom) || rows.at(-1);
-      if (!targetRow) return;
-      const box = targetRow.getBoundingClientRect();
-      move.target = layers[Number(targetRow.dataset.index)];
-      move.before = event.clientY < box.top + box.height / 2;
-      targetRow.classList.add(move.before ? 'drop-before' : 'drop-after');
-    });
-    layerList.addEventListener('pointerup', event => {
-      const move = layerDrag;
-      if (!move || move.pointerId !== event.pointerId) return;
-      layerDrag = null;
-      if (layerList.hasPointerCapture(event.pointerId)) layerList.releasePointerCapture(event.pointerId);
-      for (const row of layerList.children) row.classList.remove('dragging');
-      clearDropMarkers(layerList);
-      if (!move.active) return;
-      suppressLayerClick = true;
-      if (move.target) reorderLayer(move.source, move.target, move.before);
-    });
-    layerList.addEventListener('pointercancel', event => {
-      if (layerDrag?.pointerId !== event.pointerId) return;
-      layerDrag = null;
-      for (const row of layerList.children) row.classList.remove('dragging');
-      clearDropMarkers(layerList);
+    const layerSort = window.PIXIE_SORTABLE.bind(layerList, {
+      rowSelector: '.layer-row', blockedSelector: 'button',
+      itemAt: index => layers[index], reorder: reorderLayer,
     });
     function cycleLayerVisibility(layer) {
       remember();
@@ -507,7 +457,7 @@
           + (hasSolo && !layer.solo ? ' solo-muted' : '');
         row.title = tr('Select or drag layer; double-click its name to rename');
         row.onclick = () => {
-          if (suppressLayerClick) return;
+          if (layerSort.suppressClick) return;
           if (activeLayer === index) return;
           stopLineSession(); stopRectangleSession();
           if (selection) remember();
@@ -591,7 +541,6 @@
       referenceLayer.replaceChildren(...visibleImages);
       updateReferenceFrame();
     }
-    let referenceListDrag = null, suppressReferenceClick = false;
     function reorderReference(sourceReference, targetReference, before) {
       const source = references.indexOf(sourceReference), target = references.indexOf(targetReference);
       if (source < 0 || target < 0) return;
@@ -615,7 +564,7 @@
         row.dataset.index = String(index);
         row.className = 'reference-row' + (index === selectedReference ? ' active' : '');
         row.title = tr('Select or drag reference; move or resize it on the canvas');
-        row.onclick = () => { if (suppressReferenceClick) return;
+        row.onclick = () => { if (referenceSort.suppressClick) return;
           if (tracePreview) {
             if (tracePreview.reference === reference) return;
             cancelTrace(false);
@@ -667,55 +616,9 @@
       traceButton.setAttribute('aria-pressed', String(!!tracePreview));
       updateReferenceFrame();
     }
-    referenceList.addEventListener('pointerdown', event => {
-      suppressReferenceClick = false;
-      if (event.button !== 0 || event.target.closest('button, .reference-opacity')) return;
-      const row = event.target.closest('.reference-row');
-      if (!row || !referenceList.contains(row)) return;
-      referenceListDrag = { source: references[Number(row.dataset.index)], pointerId: event.pointerId,
-        x: event.clientX, y: event.clientY, active: false, target: null, before: false };
-    });
-    referenceList.addEventListener('pointermove', event => {
-      const move = referenceListDrag;
-      if (!move || move.pointerId !== event.pointerId) return;
-      if (!move.active) {
-        const dx = event.clientX - move.x, dy = event.clientY - move.y;
-        if (dx * dx + dy * dy < 16) return;
-        move.active = true;
-        referenceList.setPointerCapture(event.pointerId);
-        const sourceRow = [...referenceList.children].find(row =>
-          references[Number(row.dataset.index)] === move.source);
-        sourceRow?.classList.add('dragging');
-      }
-      event.preventDefault(); clearDropMarkers(referenceList);
-      move.target = null;
-      const bounds = referenceList.getBoundingClientRect();
-      if (event.clientX < bounds.left || event.clientX > bounds.right ||
-          event.clientY < bounds.top || event.clientY > bounds.bottom) return;
-      const rows = [...referenceList.children];
-      const targetRow = rows.find(item => event.clientY <= item.getBoundingClientRect().bottom) || rows.at(-1);
-      if (!targetRow) return;
-      const box = targetRow.getBoundingClientRect();
-      move.target = references[Number(targetRow.dataset.index)];
-      move.before = event.clientY < box.top + box.height / 2;
-      targetRow.classList.add(move.before ? 'drop-before' : 'drop-after');
-    });
-    referenceList.addEventListener('pointerup', event => {
-      const move = referenceListDrag;
-      if (!move || move.pointerId !== event.pointerId) return;
-      referenceListDrag = null;
-      if (referenceList.hasPointerCapture(event.pointerId)) referenceList.releasePointerCapture(event.pointerId);
-      for (const row of referenceList.children) row.classList.remove('dragging');
-      clearDropMarkers(referenceList);
-      if (!move.active) return;
-      suppressReferenceClick = true;
-      if (move.target) reorderReference(move.source, move.target, move.before);
-    });
-    referenceList.addEventListener('pointercancel', event => {
-      if (referenceListDrag?.pointerId !== event.pointerId) return;
-      referenceListDrag = null;
-      for (const row of referenceList.children) row.classList.remove('dragging');
-      clearDropMarkers(referenceList);
+    const referenceSort = window.PIXIE_SORTABLE.bind(referenceList, {
+      rowSelector: '.reference-row', blockedSelector: 'button, .reference-opacity',
+      itemAt: index => references[index], reorder: reorderReference,
     });
     document.querySelector('#reference-add').onclick = () => document.querySelector('#reference-file').click();
     document.querySelector('#reference-file').onchange = async event => {
