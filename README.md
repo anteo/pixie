@@ -36,6 +36,7 @@ Pixie lets you draw at individual pixel resolution while seeing how the result w
 - **Grid.** Show 8×8 cell boundaries and, at high zoom, individual pixel boundaries.
 - **Zoom and pan.** Pinch to zoom, scroll to pan, or use keyboard zoom presets from 1× to 9×.
 - **Undo and redo.** Revert drawing, layer changes, and selections. During an unfinished drag or shape preview, Undo cancels that action first.
+- **Unsaved changes.** Creating a document, opening another project, or importing SCR asks whether to save when the current artwork has changed. A newly imported SCR counts as unsaved until the project is saved as `.pixie`.
 
 ## Files
 

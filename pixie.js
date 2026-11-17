@@ -25,6 +25,9 @@
         '#new-size-custom-label': 'Custom size',
         '#new-dialog > p': 'Save the current project before creating a new one?',
         '#new-cancel': 'Cancel', '#new-discard': "Don't save", '#new-save': 'Save',
+        '#unsaved-dialog-title': 'Unsaved changes',
+        '#unsaved-dialog > p': 'Save the current project before replacing it?',
+        '#unsaved-cancel': 'Cancel', '#unsaved-discard': "Don't save", '#unsaved-save': 'Save',
         '#name-dialog-title': 'File name', '#name-cancel': 'Cancel', '#name-accept': 'Save',
       };
       for (const [selector, value] of Object.entries(text)) document.querySelector(selector).textContent = tr(value);
@@ -1373,6 +1376,10 @@
     function newDocument() {
       const dialog = document.querySelector('#new-dialog');
       if (dialog.open) return;
+      const dirty = hasUnsavedChanges();
+      document.querySelector('#new-dialog > p').hidden = !dirty;
+      document.querySelector('#new-save').hidden = !dirty;
+      document.querySelector('#new-discard').textContent = tr(dirty ? "Don't save" : 'Create');
       document.querySelector('input[name="new-size"][value="screen"]').checked = true;
       document.querySelector('#new-size-error').textContent = '';
       dialog.showModal();
@@ -2520,6 +2527,7 @@
       const size = requestedSize(); if (!size) return;
       newDialog.close();
       if (await saveProject()) resetDocument(size.width, size.height);
+      else newDialog.showModal();
     };
     document.querySelector('#layer-add').onclick = addLayer;
     document.querySelector('#layer-up').onclick = () => moveLayerStack(1);
@@ -2725,6 +2733,42 @@
       }
       return lines.join('\n') + '\n';
     }
+    function hasUnsavedChanges() {
+      return !!(textSession && textEntry.value) || projectText() !== savedProjectText;
+    }
+    function confirmReplacement() {
+      if (!hasUnsavedChanges()) return Promise.resolve(true);
+      return new Promise(resolve => {
+        const dialog = document.querySelector('#unsaved-dialog');
+        if (dialog.open) { resolve(false); return; }
+        const cancel = document.querySelector('#unsaved-cancel');
+        const discard = document.querySelector('#unsaved-discard');
+        const save = document.querySelector('#unsaved-save');
+        let done = false;
+        function finish(confirmed) {
+          if (done) return;
+          done = true;
+          dialog.removeEventListener('close', onClose);
+          cancel.onclick = discard.onclick = save.onclick = null;
+          if (dialog.open) dialog.close();
+          resolve(confirmed);
+        }
+        function onClose() { if (!dialog.open) finish(false); }
+        cancel.onclick = () => finish(false);
+        discard.onclick = () => finish(true);
+        save.onclick = async () => {
+          dialog.removeEventListener('close', onClose);
+          dialog.close();
+          if (await saveProject()) finish(true);
+          else {
+            dialog.addEventListener('close', onClose);
+            dialog.showModal();
+          }
+        };
+        dialog.addEventListener('close', onClose);
+        dialog.showModal();
+      });
+    }
     function parseProject(source) {
       const parsed = { layers: [], references: [] };
       let current = parsed;
@@ -2825,6 +2869,7 @@
         note(tr('A standard 6912-byte SCR file is required.'));
         event.target.value = ''; return;
       }
+      if (!await confirmReplacement()) { event.target.value = ''; return; }
       stopLineSession(); stopRectangleSession(); cancelText();
       setDocumentSize(MAX_W, MAX_H, true);
       layers = [{ name: file.name, visible: true, solo: false, x: 0, y: 0,
@@ -2885,6 +2930,7 @@
       try {
         const source = await file.text();
         let project = parseProject(source);
+        if (!await confirmReplacement()) return;
         if (handle) {
           const currentSource = await (await handle.getFile()).text();
           if (currentSource !== source) project = parseProject(currentSource);
