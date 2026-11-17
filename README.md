@@ -1,4 +1,4 @@
-# Pixie
+# ![Pixie icon](pixie.png) Pixie
 
 **A browser-based graphics editor for ZX Spectrum screens.**
 
