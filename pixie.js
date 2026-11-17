@@ -315,16 +315,22 @@
       const sx = x - active().x, sy = y - active().y;
       writeLayerAttr(active(), sx, sy, value);
     }
-    function paintAttrCell(x, y) {
+    function drawingAttr(x, y) {
+      if (!paperTransparent) return activeAttr();
+      const previous = getAttr(x, y);
+      const brightBit = (previous & 0x38) ? (previous & 0x40) : (brightEnabled ? 0x40 : 0);
+      return (previous & 0x38) | ink | brightBit;
+    }
+    function paintAttrCell(x, y, updateMask = true) {
       const sx = x - active().x, sy = y - active().y;
       const x0 = sx & ~7, y0 = sy & ~7;
-      const previous = layerAttr(active(), sx, sy);
-      writeLayerAttr(active(), sx, sy, paperTransparent
-        ? (previous & 0x38) | ink | (brightEnabled ? 64 : 0) : activeAttr());
+      writeLayerAttr(active(), sx, sy, drawingAttr(x, y));
+      if (!updateMask) return;
       for (let py = y0; py < y0 + 8; py++) {
         for (let px = x0; px < x0 + 8; px++) {
           const on = layerBit(active(), px, py);
-          writeLayerBit(active(), px, py, on, on ? !inkTransparent : !paperTransparent);
+          if (on) writeLayerBit(active(), px, py, on, !inkTransparent);
+          else if (!paperTransparent) writeLayerBit(active(), px, py, on, true);
         }
       }
     }
@@ -1595,7 +1601,7 @@
         for (let bx = x - offset; bx < x - offset + width; bx++) {
           if (on && !inkTransparent) {
             setBit(bx, by, true, true);
-            paintAttrCell(bx, by);
+            paintAttrCell(bx, by, !paperTransparent);
           } else {
             setBit(bx, by, false, on ? false : !paperTransparent);
           }
@@ -1738,10 +1744,9 @@
         const cell = queue[i], x = cell % W, y = Math.floor(cell / W);
         if (forceErase || inkTransparent) setBit(x, y, false, forceErase && !paperTransparent);
         else {
+          const attribute = drawingAttr(x, y);
           setBit(x, y, true, true);
-          const previous = getAttr(x, y);
-          setAttr(x, y, paperTransparent
-            ? (previous & 0x38) | ink | (brightEnabled ? 64 : 0) : activeAttr());
+          setAttr(x, y, attribute);
         }
       }
     }
@@ -1910,7 +1915,11 @@
           for (let row = 0; row < 8; row++) for (let col = 0; col < 8; col++) {
             const x = p.x + n * 8 + col, y = p.y + row;
             const on = !!(font[(code - 32) * 8 + row] & (128 >> col));
-            setBit(x, y, on); setAttr(x, y, activeAttr());
+            if (!on && paperTransparent) continue;
+            if (on && inkTransparent) { setBit(x, y, false, false); continue; }
+            const attribute = drawingAttr(x, y);
+            setBit(x, y, on);
+            setAttr(x, y, attribute);
           }
         }
       } finally { activeLayer = originalIndex; }
