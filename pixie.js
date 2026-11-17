@@ -468,34 +468,10 @@
       coords.textContent = `${active().x}:${active().y}`;
       coords.title = tr('Layer offset: x {x}, y {y}', { x: active().x, y: active().y });
     }
-    function updateReferenceFrame() {
-      const reference = references[selectedReference];
-      referenceFrame.hidden = !reference || !reference.visible || !!tracePreview || !!pendingMove;
-      if (referenceFrame.hidden) return;
-      referenceFrame.style.left = `${reference.x * zoom}px`;
-      referenceFrame.style.top = `${reference.y * zoom}px`;
-      referenceFrame.style.width = `${reference.width * zoom}px`;
-      referenceFrame.style.height = `${reference.height * zoom}px`;
-    }
-    function renderReferences() {
-      const visibleImages = [];
-      for (const reference of references) {
-        if (tracePreview && reference !== tracePreview.reference) continue;
-        if (!reference.visible || !reference.image || reference.opacity <= 0) continue;
-        const image = reference.image;
-        const width = reference.width * zoom, height = reference.height * zoom;
-        image.style.left = `${reference.x * zoom}px`;
-        image.style.top = `${reference.y * zoom}px`;
-        image.style.width = `${width}px`;
-        image.style.height = `${height}px`;
-        image.style.opacity = String(reference.opacity);
-        image.style.imageRendering = width >= image.naturalWidth && height >= image.naturalHeight
-          ? 'pixelated' : 'auto';
-        visibleImages.push(image);
-      }
-      referenceLayer.replaceChildren(...visibleImages);
-      updateReferenceFrame();
-    }
+    const updateReferenceFrame = () => window.PIXIE_REFERENCES.updateFrame(
+      referenceFrame, references, selectedReference, tracePreview, pendingMove, zoom);
+    const renderReferences = () => window.PIXIE_REFERENCES.render(
+      referenceLayer, referenceFrame, references, selectedReference, tracePreview, pendingMove, zoom);
     function reorderReference(sourceReference, targetReference, before) {
       const source = references.indexOf(sourceReference), target = references.indexOf(targetReference);
       if (source < 0 || target < 0) return;
@@ -614,22 +590,8 @@
     function traceReference() {
       return references[selectedReference] || null;
     }
-    function sampleReference(reference) {
-      const canvas = document.createElement('canvas');
-      canvas.width = W; canvas.height = H;
-      const context = canvas.getContext('2d', { willReadFrequently: true });
-      context.imageSmoothingEnabled = true;
-      context.imageSmoothingQuality = 'high';
-      context.drawImage(reference.image, reference.x, reference.y, reference.width, reference.height);
-      return context.getImageData(0, 0, W, H);
-    }
-    function referenceArea(reference) {
-      const left = Math.max(0, Math.floor(reference.x));
-      const top = Math.max(0, Math.floor(reference.y));
-      const right = Math.min(W, Math.ceil(reference.x + reference.width));
-      const bottom = Math.min(H, Math.ceil(reference.y + reference.height));
-      return right > left && bottom > top ? { x: left, y: top, w: right - left, h: bottom - top } : null;
-    }
+    const sampleReference = reference => window.PIXIE_REFERENCES.sample(reference, W, H);
+    const referenceArea = reference => window.PIXIE_REFERENCES.area(reference, W, H);
     function changeTraceArea(area, target = area) {
       if (!tracePreview || !area || area.w < 1 || area.h < 1) return;
       const color = paletteRgb[backgroundCode < 0 ? 0 : backgroundCode];
