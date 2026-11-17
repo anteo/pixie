@@ -1971,55 +1971,11 @@
       setZxPreview(!zxPreview);
       note(tr(zxPreview ? 'ZX attribute preview on.' : 'ZX attribute preview off.'));
     };
-    function zoomAt(value, clientX, clientY) {
-      const next = Math.max(1, Math.min(24, value));
-      if (next === zoom) return;
-      const view = viewport.getBoundingClientRect();
-      if (!Number.isFinite(clientX)) clientX = view.left + view.width / 2;
-      if (!Number.isFinite(clientY)) clientY = view.top + view.height / 2;
-      const rect = stage.getBoundingClientRect();
-      const x = (clientX - rect.left) / zoom, y = (clientY - rect.top) / zoom;
-      const previous = zoom;
-      zoom = next;
-      stage.style.width = W * zoom + 'px';
-      stage.style.height = H * zoom + 'px';
-      renderReferences();
-      drawOverlay();
-      if ((previous >= 8) !== (zoom >= 8)) { drawTransparency(); updateGrid(); }
-      viewport.scrollLeft += x * (zoom - previous);
-      viewport.scrollTop += y * (zoom - previous);
-    }
-    function zoomAtCenter(value) {
-      const rect = viewport.getBoundingClientRect();
-      zoomAt(value, rect.left + rect.width / 2, rect.top + rect.height / 2);
-    }
-    function fitZoom() {
-      const width = (viewport.clientWidth - 60) / W;
-      const height = (viewport.clientHeight - 60) / H;
-      zoomAtCenter(Math.max(1, Math.min(width, height)));
-    }
-    document.querySelector('#zoom-1').onclick = () => zoomAtCenter(1);
-    document.querySelector('#zoom-2').onclick = () => zoomAtCenter(2);
-    document.querySelector('#zoom-fit').onclick = fitZoom;
-    // Chromium sends trackpad pinch as Ctrl+wheel. An ordinary wheel scrolls the viewport.
-    viewport.addEventListener('wheel', event => {
-      if (!event.ctrlKey) return;
-      event.preventDefault();
-      if (!safariGesture) zoomAt(zoom * Math.exp(-event.deltaY * 0.01), event.clientX, event.clientY);
-    }, { passive: false });
-    // Safari uses gesture events for the same trackpad motion.
-    let safariGesture = false, safariScale = 1;
-    viewport.addEventListener('gesturestart', event => {
-      event.preventDefault(); safariGesture = true; safariScale = 1;
-    }, { passive: false });
-    viewport.addEventListener('gesturechange', event => {
-      event.preventDefault();
-      zoomAt(zoom * event.scale / safariScale, event.clientX, event.clientY);
-      safariScale = event.scale;
-    }, { passive: false });
-    viewport.addEventListener('gestureend', event => {
-      event.preventDefault(); safariGesture = false;
-    }, { passive: false });
+    const { zoomAt, zoomAtCenter, fitZoom } = window.PIXIE_VIEWPORT.bind({
+      viewport, stage, getSize: () => ({ width: W, height: H }),
+      getZoom: () => zoom, setZoom: value => { zoom = value; },
+      renderReferences, drawOverlay, drawTransparency, updateGrid,
+    });
     function projectText() {
       const previews = pendingMove && !tracePreview ? pendingPreviewLayers() : null;
       return window.PIXIE_PROJECT.projectText({
