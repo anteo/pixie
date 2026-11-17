@@ -219,6 +219,7 @@ window.PIXIE_SELECTION = (() => {
     source: move.source ? { ...move.source } : null, target: { ...move.target },
     sourceLayer: move.sourceLayer, targetLayer: move.targetLayer,
     data: copyPixels(move.data), scaleSource: move.scaleSource ? copyPixels(move.scaleSource) : null,
+    cut: !!move.cut,
   } : null;
   function capture(s, layer, fallbackAttr) {
     const bits = new Uint8Array(s.w * s.h), colors = new Uint8Array(bits.length), opacity = new Uint8Array(bits.length);

@@ -1263,6 +1263,7 @@
         drag.sourceLayer = pendingMove ? pendingMove.sourceLayer : activeLayer;
         drag.targetLayer = pendingMove ? pendingMove.targetLayer : activeLayer;
         drag.originalData = pendingMove ? pendingMove.scaleSource || pendingMove.data : capture(drag.source);
+        drag.cut = !!pendingMove?.cut;
         drag.handle = resizeHandle;
       }
       if (drag.action === 'select') selection = null;
@@ -1371,7 +1372,8 @@
         if (!sameSelection(drag.source, drag.target)) {
           remember();
           pendingMove = { source: drag.sourceToClear, data: drag.data, target: { ...drag.target },
-            sourceLayer: drag.sourceLayer, targetLayer: drag.targetLayer, scaleSource: drag.originalData };
+            sourceLayer: drag.sourceLayer, targetLayer: drag.targetLayer,
+            scaleSource: drag.originalData, cut: drag.cut };
           selection = { ...drag.target };
         }
       }
@@ -1438,6 +1440,7 @@
     document.querySelector('#copy').onclick = () => {
       if (!selection) return;
       clipboard = captureSelection();
+      if (pendingMove) pendingMove.cut = false;
       note(tr(tracePreview ? 'Traced selection copied.' : 'Selection copied.'));
     };
     document.querySelector('#cut').onclick = () => {
@@ -1446,17 +1449,31 @@
         clipboard = captureSelection(); cancelTrace(false);
         note(tr('Traced selection cut to clipboard.')); return;
       }
-      clipboard = captureSelection(); remember(); removeSelectionPixels(); render();
+      clipboard = captureSelection(); remember();
+      const previous = pendingMove;
+      const cleared = copyPixels(clipboard);
+      cleared.opacity.fill(0);
+      pendingMove = { source: previous ? previous.source : { ...selection },
+        data: cleared, target: { ...selection },
+        sourceLayer: previous ? previous.sourceLayer : activeLayer,
+        targetLayer: previous ? previous.targetLayer : activeLayer, cut: true };
+      render();
       note(tr('Selection cut.'));
     };
     document.querySelector('#paste').onclick = () => {
       if (!clipboard) { note(tr('Copy a selection first.')); return; }
       if (tracePreview) cancelTrace(false);
       commitText(); remember();
-      finishPendingMove();
       selection = { x: clipboard.x, y: clipboard.y, w: clipboard.w, h: clipboard.h };
-      pendingMove = copyMove({ source: null, data: clipboard, target: selection,
-        sourceLayer: null, targetLayer: activeLayer });
+      if (pendingMove?.cut) {
+        pendingMove.data = copyPixels(clipboard);
+        pendingMove.target = { ...selection };
+        pendingMove.cut = false;
+      } else {
+        finishPendingMove();
+        pendingMove = copyMove({ source: null, data: clipboard, target: selection,
+          sourceLayer: null, targetLayer: activeLayer });
+      }
       setTool('select'); render();
       note(tr('Floating paste at its original position. Drag it or deselect to apply.'));
     };
