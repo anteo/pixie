@@ -173,9 +173,9 @@
   .layers-heading strong { margin-right: auto; }
   .layers-heading .icon-button { width: 27px; height: 27px; padding: 4px; }
   .layers-heading .icon { width: 17px; height: 17px; }
-  #layer-list { display: flex; flex-direction: column; gap: 4px; overflow: auto; }
-  #background-panel { display: grid; gap: 8px; margin-top: 8px; }
-  .layers-heading strong, #background-panel strong { font-size: 17px; }
+  #layer-list { display: flex; flex: 0 1 auto; flex-direction: column; gap: 4px; min-height: 0; overflow: auto; }
+  #background-panel { display: grid; flex: none; gap: 8px; margin-top: 8px; }
+  .layers-heading strong, #background-panel strong, .references-heading strong { font-size: 17px; }
   #background-swatches { display: grid; grid-template-columns: repeat(9, minmax(0, 1fr)); gap: 3px; }
   #background-swatches .swatch { width: 100%; min-width: 0; height: 20px; }
   .layer-row { display: flex; align-items: center; gap: 5px; min-width: 0; padding: 5px; border: 1px solid #4d515b; border-radius: 5px; cursor: grab; user-select: none; touch-action: none; }
@@ -191,6 +191,24 @@
   .layer-eye .icon { width: 17px; height: 17px; }
   .layer-eye .solo-mark { font: 700 15px/1 ui-monospace, monospace; }
   .layer-coords { flex: none; color: #aeb6c4; font: 11px ui-monospace, monospace; white-space: nowrap; }
+  #references-panel { display: flex; flex-direction: column; gap: 8px; min-height: 0; margin-top: 8px; }
+  .references-heading { display: flex; align-items: center; justify-content: space-between; }
+  .references-heading .icon-button { width: 27px; height: 27px; padding: 4px; }
+  .references-heading .icon { width: 17px; height: 17px; }
+  #reference-file { display: none; }
+  #reference-list { display: flex; flex-direction: column; gap: 5px; min-height: 0; overflow: auto; }
+  .reference-row { display: grid; grid-template-columns: 26px 32px minmax(0, 1fr) 26px; align-items: center; gap: 5px; padding: 5px; border: 1px solid #4d515b; border-radius: 5px; cursor: grab; user-select: none; touch-action: none; }
+  .reference-row.active { border-color: #ff40ff; background: #3d263e; }
+  .reference-row.dragging { opacity: .45; }
+  .reference-row.drop-before { box-shadow: inset 0 3px #ff40ff; }
+  .reference-row.drop-after { box-shadow: inset 0 -3px #ff40ff; }
+  .reference-row img { width: 32px; height: 26px; object-fit: contain; background: #252830; image-rendering: auto; }
+  .reference-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .reference-row .icon-button { width: 26px; height: 26px; padding: 4px; }
+  .reference-row .icon { width: 16px; height: 16px; }
+  .reference-opacity { grid-column: 1 / -1; display: flex; align-items: center; gap: 6px; }
+  .reference-opacity input { width: 100%; min-width: 0; accent-color: #ff40ff; }
+  .reference-opacity output { width: 4ch; text-align: right; font: 11px ui-monospace, monospace; }
   @media (max-width: 800px) { :root { --tool-rail-width: 48px; } .workspace { grid-template-columns: var(--tool-rail-width) minmax(0, 1fr) 188px; } #layers-panel { padding: 6px; } .layers-heading .icon-button { width: 23px; } }
 
   #stage {
@@ -216,6 +234,8 @@
   canvas {
     image-rendering: pixelated;
   }
+  #reference-layer { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+  #reference-layer img { position: absolute; display: block; max-width: none; pointer-events: none; }
 
   #screen {
     cursor: crosshair;
@@ -228,6 +248,19 @@
   #overlay {
     pointer-events: none;
   }
+  #reference-frame { position: absolute; z-index: 5; cursor: move; box-shadow: inset 0 0 0 1px #ff40ff; }
+  #reference-frame[hidden] { display: none; }
+  .reference-edge, .reference-handle { position: absolute; pointer-events: auto; }
+  .reference-edge { cursor: move; }
+  .reference-edge.top, .reference-edge.bottom { left: 7px; right: 7px; height: 6px; }
+  .reference-edge.top { top: -3px; } .reference-edge.bottom { bottom: -3px; }
+  .reference-edge.left, .reference-edge.right { top: 7px; bottom: 7px; width: 6px; }
+  .reference-edge.left { left: -3px; } .reference-edge.right { right: -3px; }
+  .reference-handle { width: 10px; height: 10px; background: #ff40ff; border: 1px solid #fff; }
+  .reference-handle.nw { left: -5px; top: -5px; cursor: nwse-resize; }
+  .reference-handle.ne { right: -5px; top: -5px; cursor: nesw-resize; }
+  .reference-handle.se { right: -5px; bottom: -5px; cursor: nwse-resize; }
+  .reference-handle.sw { left: -5px; bottom: -5px; cursor: nesw-resize; }
 
   #status-bar {
     padding: 8px 14px;

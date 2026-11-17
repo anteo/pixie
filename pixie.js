@@ -17,6 +17,7 @@
         '#app-tagline': 'The ZX Spectrum graphics editor',
         '#layers-panel .layers-heading strong': 'Layers',
         '#background-panel strong': 'Background',
+        '#references-panel .references-heading strong': 'References',
         '#status': 'New blank project. Add a layer or import SCR.',
         '#new-dialog-title': 'New document',
         '#new-dialog legend': 'Size',
@@ -67,6 +68,9 @@
         '#layer-merge': ['Merge with layer below (Shift+M)', 'Merge with layer below'],
         '#layer-delete': ['Delete layer (⇧L)', 'Delete layer'],
         '#background-swatches': [null, 'Background color'],
+        '#references-panel': [null, 'Reference images'],
+        '#reference-add': ['Add reference image', 'Add reference image'],
+        '#reference-frame': [null, 'Selected reference image'],
         '#stroke-current': ['Brush size: 1×1 pixels', 'Brush size'],
         '#cursor-info': ['INK and PAPER after SCR encoding', 'SCR attributes under cursor'],
         '#new-width': [null, 'Width in pixels'], '#new-height': [null, 'Height in pixels'],
@@ -89,8 +93,12 @@
     }
     let layers = [emptyLayer(tr('Layer {number}', { number: 1 }))];
     let activeLayer = 0, bitmap = layers[0].bitmap, attrs = layers[0].attrs, mask = layers[0].mask;
+    let references = [], selectedReference = -1, referenceDrag = null;
     let projectFileName = 'screen.pixie', exportFileName = 'screen.scr';
     const screen = document.querySelector('#screen');
+    const referenceLayer = document.querySelector('#reference-layer');
+    const referenceFrame = document.querySelector('#reference-frame');
+    const referenceList = document.querySelector('#reference-list');
     const transparencyCanvas = document.querySelector('#transparency');
     const transparencyContext = transparencyCanvas.getContext('2d');
     const pixelGrid = document.querySelector('#pixel-grid'), cellGrid = document.querySelector('#cell-grid');
@@ -128,6 +136,8 @@
           ? (backgroundCode > 8 ? bright[backgroundCode - 8] : normal[backgroundCode])
           : (brightEnabled ? bright : normal)[index];
       }
+      referenceLayer.style.backgroundColor = backgroundCode < 0 ? 'transparent'
+        : (backgroundCode >= 8 ? bright[backgroundCode - 8] : normal[backgroundCode]);
     }
     for (let i = 0; i < 9; i++) {
       const button = document.createElement('button');
@@ -312,6 +322,7 @@
     } : null;
     function snapshot() {
       return { activeLayer, projectFileName, exportFileName, backgroundCode, width: W, height: H,
+        references: references.map(reference => ({ ...reference })), selectedReference,
         selection: selection ? { ...selection } : null, pendingMove: copyMove(pendingMove), layers: layers.map(layer => ({
         name: layer.name, visible: layer.visible, solo: !!layer.solo, x: layer.x, y: layer.y,
         bitmap: layer.bitmap.slice(), attrs: layer.attrs.slice(), mask: layer.mask.slice(),
@@ -331,10 +342,12 @@
       const saved = from.pop(); layers = saved.layers; activeLayer = saved.activeLayer;
       projectFileName = saved.projectFileName; exportFileName = saved.exportFileName;
       backgroundCode = saved.backgroundCode;
+      references = saved.references.map(reference => ({ ...reference }));
+      selectedReference = saved.selectedReference;
       setDocumentSize(saved.width, saved.height);
       bindActive(); selection = saved.selection ? { ...saved.selection } : null;
       pendingMove = copyMove(saved.pendingMove);
-      updateBackgroundSwatches(); renderLayerList(); render(); updateCanvasCursor();
+      updateBackgroundSwatches(); renderLayerList(); renderReferenceList(); renderReferences(); render(); updateCanvasCursor();
     }
     function layerForPreview(index, previews, sourceLayers = layers) {
       return previews?.get(index) || sourceLayers[index];
@@ -448,10 +461,12 @@
     }
     function render(composite = null, outline = null, previews = null) {
       if (!previews && pendingMove) previews = pendingPreviewLayers();
+      const referenceCoverage = references.some(reference => reference.visible && reference.opacity > 0)
+        ? compositePixels(previews, layers, -1).coverage : null;
       const soloLayers = layers.map((layer, index) => layerForPreview(index, previews))
         .filter(layer => layer.visible && layer.solo);
       if (soloLayers.length) {
-        renderSolo(soloLayers, outline, previews);
+        renderSolo(soloLayers, outline, previews, referenceCoverage);
         return;
       }
       cursorInfo.title = tr('INK and PAPER after SCR encoding');
@@ -461,7 +476,7 @@
       displayedScr = composite;
       displayedSoloLayers = [];
       const raw = !zxPreview || backgroundCode === -1 ? compositePixels(previews) : null;
-      displayedCoverage = backgroundCode === -1 ? raw.coverage : null;
+      displayedCoverage = referenceCoverage || (backgroundCode === -1 ? raw.coverage : null);
       for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
         let rgb;
         if (zxPreview) {
@@ -489,14 +504,14 @@
       }
       return null;
     }
-    function renderSolo(soloLayers, outline, previews) {
+    function renderSolo(soloLayers, outline, previews, referenceCoverage) {
       cursorInfo.title = tr(zxPreview
         ? 'Solo layers use their own attributes; dimmed pixels show ZX rendering'
         : 'Solo layers use their own attributes; dimmed pixels show raw compositing');
       cursorInfo.setAttribute('aria-label', tr('Attributes under cursor in solo preview'));
       const scr = flatten(previews);
       const raw = !zxPreview || backgroundCode === -1 ? compositePixels(previews) : null;
-      const coverage = backgroundCode === -1 ? raw.coverage : null;
+      const coverage = referenceCoverage || (backgroundCode === -1 ? raw.coverage : null);
       const image = ctx.createImageData(W, H), pixels = image.data;
       displayedScr = scr;
       displayedCoverage = coverage;
@@ -563,7 +578,7 @@
     }
     const layerList = document.querySelector('#layer-list');
     let layerDrag = null, suppressLayerClick = false;
-    function clearLayerDropMarkers(list) {
+    function clearDropMarkers(list) {
       for (const item of list.children) item.classList.remove('drop-before', 'drop-after');
     }
     function reorderLayer(sourceLayer, targetLayer, before) {
@@ -605,7 +620,7 @@
           layers[Number(row.dataset.index)] === move.source);
         sourceRow?.classList.add('dragging');
       }
-      event.preventDefault(); clearLayerDropMarkers(layerList);
+      event.preventDefault(); clearDropMarkers(layerList);
       move.target = null;
       const bounds = layerList.getBoundingClientRect();
       if (event.clientX < bounds.left || event.clientX > bounds.right ||
@@ -624,7 +639,7 @@
       layerDrag = null;
       if (layerList.hasPointerCapture(event.pointerId)) layerList.releasePointerCapture(event.pointerId);
       for (const row of layerList.children) row.classList.remove('dragging');
-      clearLayerDropMarkers(layerList);
+      clearDropMarkers(layerList);
       if (!move.active) return;
       suppressLayerClick = true;
       if (move.target) reorderLayer(move.source, move.target, move.before);
@@ -633,7 +648,7 @@
       if (layerDrag?.pointerId !== event.pointerId) return;
       layerDrag = null;
       for (const row of layerList.children) row.classList.remove('dragging');
-      clearLayerDropMarkers(layerList);
+      clearDropMarkers(layerList);
     });
     function cycleLayerVisibility(layer) {
       remember();
@@ -707,6 +722,227 @@
       coords.textContent = `x:${active().x} y:${active().y}`;
       coords.title = tr('Layer offset: x {x}, y {y}', { x: active().x, y: active().y });
     }
+    function updateReferenceFrame() {
+      const reference = references[selectedReference];
+      referenceFrame.hidden = !reference || !reference.visible;
+      if (referenceFrame.hidden) return;
+      referenceFrame.style.left = `${reference.x * zoom}px`;
+      referenceFrame.style.top = `${reference.y * zoom}px`;
+      referenceFrame.style.width = `${reference.width * zoom}px`;
+      referenceFrame.style.height = `${reference.height * zoom}px`;
+    }
+    function renderReferences() {
+      const visibleImages = [];
+      for (const reference of references) {
+        if (!reference.visible || !reference.image || reference.opacity <= 0) continue;
+        const image = reference.image;
+        const width = reference.width * zoom, height = reference.height * zoom;
+        image.style.left = `${reference.x * zoom}px`;
+        image.style.top = `${reference.y * zoom}px`;
+        image.style.width = `${width}px`;
+        image.style.height = `${height}px`;
+        image.style.opacity = String(reference.opacity);
+        image.style.imageRendering = width >= image.naturalWidth && height >= image.naturalHeight
+          ? 'pixelated' : 'auto';
+        visibleImages.push(image);
+      }
+      referenceLayer.replaceChildren(...visibleImages);
+      updateReferenceFrame();
+    }
+    let referenceListDrag = null, suppressReferenceClick = false;
+    function reorderReference(sourceReference, targetReference, before) {
+      const source = references.indexOf(sourceReference), target = references.indexOf(targetReference);
+      if (source < 0 || target < 0) return;
+      let insertion = before ? target + 1 : target;
+      if (source < insertion) insertion--;
+      if (insertion === source) return;
+      const selected = references[selectedReference];
+      remember();
+      const [moved] = references.splice(source, 1);
+      references.splice(insertion, 0, moved);
+      selectedReference = selected ? references.indexOf(selected) : -1;
+      renderReferences(); renderReferenceList();
+      note(tr('Reference order changed.'));
+    }
+    function renderReferenceList() {
+      referenceList.replaceChildren();
+      for (let index = references.length - 1; index >= 0; index--) {
+        const reference = references[index];
+        const row = document.createElement('div');
+        row.dataset.index = String(index);
+        row.className = 'reference-row' + (index === selectedReference ? ' active' : '');
+        row.title = tr('Select or drag reference; move or resize it on the canvas');
+        row.onclick = () => { if (suppressReferenceClick) return;
+          selectedReference = index === selectedReference ? -1 : index;
+          renderReferenceList(); updateReferenceFrame(); };
+        const thumb = document.createElement('img');
+        thumb.src = reference.dataUrl; thumb.alt = ''; thumb.draggable = false;
+        const name = document.createElement('span');
+        name.className = 'reference-name'; name.textContent = reference.name; name.title = reference.name;
+        const eye = document.createElement('button');
+        eye.type = 'button'; eye.className = 'icon-button';
+        eye.title = tr(reference.visible ? 'Hide reference' : 'Show reference');
+        eye.setAttribute('aria-label', eye.title);
+        eye.innerHTML = `<svg class="icon"><use href="#i-eye${reference.visible ? '' : '-off'}"/></svg>`;
+        eye.onclick = event => { event.stopPropagation(); remember(); reference.visible = !reference.visible;
+          renderReferences(); renderReferenceList(); render(); };
+        const remove = document.createElement('button');
+        remove.type = 'button'; remove.className = 'icon-button';
+        remove.title = tr('Delete reference'); remove.setAttribute('aria-label', remove.title);
+        remove.innerHTML = '<svg class="icon"><use href="#i-trash"/></svg>';
+        remove.onclick = event => { event.stopPropagation(); remember(); references.splice(index, 1);
+          if (selectedReference === index) selectedReference = -1;
+          else if (selectedReference > index) selectedReference--;
+          renderReferences(); renderReferenceList(); render(); };
+        const opacity = document.createElement('label');
+        opacity.className = 'reference-opacity';
+        const slider = document.createElement('input');
+        slider.type = 'range'; slider.min = '0'; slider.max = '100'; slider.value = String(Math.round(reference.opacity * 100));
+        slider.title = tr('Reference opacity');
+        slider.setAttribute('aria-label', `${reference.name}: ${tr('Reference opacity')}`);
+        const output = document.createElement('output');
+        output.textContent = `${slider.value}%`;
+        let editing = false;
+        slider.oninput = event => { event.stopPropagation();
+          if (!editing) { remember(); editing = true; }
+          reference.opacity = Number(slider.value) / 100; output.textContent = `${slider.value}%`;
+          renderReferences(); render(); };
+        slider.onchange = () => { editing = false; };
+        slider.onblur = () => { editing = false; };
+        slider.onclick = event => event.stopPropagation();
+        opacity.append(slider, output);
+        row.append(eye, thumb, name, remove, opacity);
+        referenceList.appendChild(row);
+      }
+      updateReferenceFrame();
+    }
+    referenceList.addEventListener('pointerdown', event => {
+      suppressReferenceClick = false;
+      if (event.button !== 0 || event.target.closest('button, .reference-opacity')) return;
+      const row = event.target.closest('.reference-row');
+      if (!row || !referenceList.contains(row)) return;
+      referenceListDrag = { source: references[Number(row.dataset.index)], pointerId: event.pointerId,
+        x: event.clientX, y: event.clientY, active: false, target: null, before: false };
+    });
+    referenceList.addEventListener('pointermove', event => {
+      const move = referenceListDrag;
+      if (!move || move.pointerId !== event.pointerId) return;
+      if (!move.active) {
+        const dx = event.clientX - move.x, dy = event.clientY - move.y;
+        if (dx * dx + dy * dy < 16) return;
+        move.active = true;
+        referenceList.setPointerCapture(event.pointerId);
+        const sourceRow = [...referenceList.children].find(row =>
+          references[Number(row.dataset.index)] === move.source);
+        sourceRow?.classList.add('dragging');
+      }
+      event.preventDefault(); clearDropMarkers(referenceList);
+      move.target = null;
+      const bounds = referenceList.getBoundingClientRect();
+      if (event.clientX < bounds.left || event.clientX > bounds.right ||
+          event.clientY < bounds.top || event.clientY > bounds.bottom) return;
+      const rows = [...referenceList.children];
+      const targetRow = rows.find(item => event.clientY <= item.getBoundingClientRect().bottom) || rows.at(-1);
+      if (!targetRow) return;
+      const box = targetRow.getBoundingClientRect();
+      move.target = references[Number(targetRow.dataset.index)];
+      move.before = event.clientY < box.top + box.height / 2;
+      targetRow.classList.add(move.before ? 'drop-before' : 'drop-after');
+    });
+    referenceList.addEventListener('pointerup', event => {
+      const move = referenceListDrag;
+      if (!move || move.pointerId !== event.pointerId) return;
+      referenceListDrag = null;
+      if (referenceList.hasPointerCapture(event.pointerId)) referenceList.releasePointerCapture(event.pointerId);
+      for (const row of referenceList.children) row.classList.remove('dragging');
+      clearDropMarkers(referenceList);
+      if (!move.active) return;
+      suppressReferenceClick = true;
+      if (move.target) reorderReference(move.source, move.target, move.before);
+    });
+    referenceList.addEventListener('pointercancel', event => {
+      if (referenceListDrag?.pointerId !== event.pointerId) return;
+      referenceListDrag = null;
+      for (const row of referenceList.children) row.classList.remove('dragging');
+      clearDropMarkers(referenceList);
+    });
+    function decodeReference(dataUrl) {
+      return new Promise((resolve, reject) => {
+        const image = new Image();
+        image.onload = () => resolve(image);
+        image.onerror = () => reject(new Error(tr('Could not load reference image.')));
+        image.src = dataUrl;
+      });
+    }
+    function readReference(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(new Error(tr('Could not load reference image.')));
+        reader.readAsDataURL(file);
+      });
+    }
+    document.querySelector('#reference-add').onclick = () => document.querySelector('#reference-file').click();
+    document.querySelector('#reference-file').onchange = async event => {
+      let added = false;
+      for (const file of event.target.files) {
+        try {
+          const dataUrl = await readReference(file);
+          const image = await decodeReference(dataUrl);
+          if (!image.naturalWidth || !image.naturalHeight) throw new Error(tr('Could not load reference image.'));
+          if (!added) { remember(); added = true; }
+          const scale = Math.min(1, W / image.naturalWidth, H / image.naturalHeight);
+          const width = image.naturalWidth * scale, height = image.naturalHeight * scale;
+          references.push({ name: file.name, visible: true, opacity: 0.5,
+            x: (W - width) / 2, y: (H - height) / 2, width, height, dataUrl, image });
+          selectedReference = references.length - 1;
+        } catch (error) { note(error.message); }
+      }
+      event.target.value = '';
+      if (added) { renderReferences(); renderReferenceList(); render(); }
+    };
+    referenceFrame.addEventListener('pointerdown', event => {
+      if (event.button !== 0 || selectedReference < 0) return;
+      const handle = event.target.dataset.handle || 'move';
+      event.preventDefault(); event.stopPropagation();
+      const reference = references[selectedReference];
+      referenceDrag = { reference, handle, pointerId: event.pointerId,
+        clientX: event.clientX, clientY: event.clientY,
+        x: reference.x, y: reference.y, width: reference.width, height: reference.height, changed: false };
+      event.target.setPointerCapture(event.pointerId);
+    });
+    referenceFrame.addEventListener('pointermove', event => {
+      const drag = referenceDrag;
+      if (!drag || drag.pointerId !== event.pointerId || !references.includes(drag.reference)) return;
+      event.preventDefault();
+      const dx = (event.clientX - drag.clientX) / zoom, dy = (event.clientY - drag.clientY) / zoom;
+      let x = drag.x, y = drag.y, width = drag.width, height = drag.height;
+      if (drag.handle === 'move') { x += dx; y += dy; }
+      else {
+        const west = drag.handle.includes('w'), north = drag.handle.includes('n');
+        width = Math.max(1, drag.width + (west ? -dx : dx));
+        height = Math.max(1, drag.height + (north ? -dy : dy));
+        if (event.shiftKey) {
+          const scaleX = width / drag.width, scaleY = height / drag.height;
+          const scale = Math.max(1 / drag.width, 1 / drag.height,
+            Math.abs(scaleX - 1) >= Math.abs(scaleY - 1) ? scaleX : scaleY);
+          width = drag.width * scale; height = drag.height * scale;
+        }
+        if (west) x = drag.x + drag.width - width;
+        if (north) y = drag.y + drag.height - height;
+      }
+      if (Math.abs(x - drag.reference.x) < 0.01 && Math.abs(y - drag.reference.y) < 0.01 &&
+          Math.abs(width - drag.reference.width) < 0.01 && Math.abs(height - drag.reference.height) < 0.01) return;
+      if (!drag.changed) { remember(); drag.changed = true; }
+      Object.assign(drag.reference, { x, y, width, height });
+      renderReferences();
+    });
+    referenceFrame.addEventListener('pointerup', event => {
+      if (referenceDrag?.pointerId === event.pointerId) referenceDrag = null;
+    });
+    referenceFrame.addEventListener('pointercancel', event => {
+      if (referenceDrag?.pointerId === event.pointerId) referenceDrag = null;
+    });
     function addLayer() {
       stopLineSession(); stopRectangleSession();
       remember();
@@ -767,6 +1003,7 @@
     function setDocumentSize(width, height) {
       W = width; H = height;
       screen.width = width; screen.height = height;
+      renderReferences();
       transparencyCanvas.width = width * 2; transparencyCanvas.height = height * 2;
       drawTransparency();
       const preview = document.querySelector('#text-preview');
@@ -788,13 +1025,14 @@
       stopLineSession(); stopRectangleSession(); cancelText(); remember();
       pendingMove = null;
       layers = [emptyLayer(tr('Layer {number}', { number: 1 }))]; activeLayer = 0; backgroundCode = 0;
+      references = []; selectedReference = -1;
       zxPreview = true; zxPreviewControl.classList.add('active'); zxPreviewControl.setAttribute('aria-pressed', 'true');
       attrMode = false; attrModeButton.classList.remove('active'); attrModeButton.setAttribute('aria-pressed', 'false');
       paperTransparent = true; updateSwatches();
       projectFileName = 'screen.pixie'; exportFileName = 'screen.scr';
       setDocumentSize(width, height);
       bindActive(); selection = null; setTool('draw');
-      updateBackgroundSwatches(); renderLayerList(); render(); fitZoom();
+      updateBackgroundSwatches(); renderLayerList(); renderReferenceList(); render(); fitZoom();
       note(tr('New blank document.'));
     }
     function newDocument() {
@@ -1358,6 +1596,11 @@
       if (rectangleSession) stopRectangleSession();
       if (selection) { remember(); finishPendingMove(); selection = null; render(); }
     });
+    document.addEventListener('pointerdown', event => {
+      if (selectedReference < 0 || event.target.closest('#reference-frame, .reference-row, #screen')) return;
+      selectedReference = -1;
+      renderReferenceList();
+    });
     function beginShapePress(kind, event) {
       shapePress = { kind, pointerId: event.pointerId, x: event.clientX, y: event.clientY, moved: false };
       screen.setPointerCapture(event.pointerId);
@@ -1375,6 +1618,12 @@
       const forceErase = event.button === 2 && (tool === 'draw' || tool === 'rect' || tool === 'fill-rect' || tool === 'ellipse' || tool === 'fill');
       if (event.button !== 0 && !forceErase) return;
       const p = point(event); if (!inside(p.x, p.y)) return;
+      if (selectedReference >= 0) {
+        event.preventDefault();
+        selectedReference = -1;
+        renderReferenceList();
+        return;
+      }
       if (forceErase) event.preventDefault();
       if (tool !== 'text' && textSession) commitText();
       const previousSelection = selection ? { ...selection } : null;
@@ -1623,6 +1872,7 @@
       zoom = next;
       stage.style.width = W * zoom + 'px';
       stage.style.height = H * zoom + 'px';
+      renderReferences();
       if ((previous >= 8) !== (zoom >= 8)) { drawTransparency(); updateGrid(); }
       viewport.scrollLeft += x * (zoom - previous);
       viewport.scrollTop += y * (zoom - previous);
@@ -1727,16 +1977,26 @@
           `attrs_base64 = "${base64(layer.attrs)}"`,
           `mask_base64 = "${base64(layer.mask)}"`);
       }
+      for (const reference of references) {
+        lines.push('', '[[reference]]', `name = ${JSON.stringify(reference.name)}`,
+          `visible = ${reference.visible}`, `opacity = ${reference.opacity}`,
+          `x = ${reference.x}`, `y = ${reference.y}`,
+          `width = ${reference.width}`, `height = ${reference.height}`,
+          `image_data = ${JSON.stringify(reference.dataUrl)}`);
+      }
       return lines.join('\n') + '\n';
     }
     function parseProject(source) {
-      const parsed = { layers: [] };
+      const parsed = { layers: [], references: [] };
       let current = parsed;
       for (const raw of source.split(/\r?\n/)) {
         const line = raw.trim();
         if (!line || line.startsWith('#')) continue;
         if (line === '[[layer]]') {
           current = {}; parsed.layers.push(current); continue;
+        }
+        if (line === '[[reference]]') {
+          current = {}; parsed.references.push(current); continue;
         }
         const match = /^([a-z][a-z0-9_]*)\s*=\s*(.+)$/.exec(line);
         if (!match) throw new Error(tr('Unrecognized project line'));
@@ -1782,7 +2042,19 @@
         return { name: item.name, visible: item.visible, solo: item.solo ?? false, x: item.x, y: item.y,
           bitmap, attrs, mask };
       });
-      return { layers: loaded, activeLayer: parsed.active, background, zxPreview: parsed.zx_preview, width, height };
+      const loadedReferences = parsed.references.map(item => {
+        if (typeof item.name !== 'string' || typeof item.visible !== 'boolean' ||
+            !Number.isFinite(item.opacity) || item.opacity < 0 || item.opacity > 1 ||
+            !Number.isFinite(item.x) || !Number.isFinite(item.y) ||
+            !Number.isFinite(item.width) || item.width <= 0 ||
+            !Number.isFinite(item.height) || item.height <= 0 ||
+            typeof item.image_data !== 'string' || !/^data:image\/[a-z0-9.+-]+;base64,/i.test(item.image_data))
+          throw new Error(tr('Invalid reference image properties'));
+        return { name: item.name, visible: item.visible, opacity: item.opacity,
+          x: item.x, y: item.y, width: item.width, height: item.height, dataUrl: item.image_data };
+      });
+      return { layers: loaded, references: loadedReferences, activeLayer: parsed.active,
+        background, zxPreview: parsed.zx_preview, width, height };
     }
     document.querySelector('#open').onclick = () => document.querySelector('#file').click();
     document.querySelector('#file').onchange = async event => {
@@ -1793,6 +2065,7 @@
       setDocumentSize(MAX_W, MAX_H);
       layers = [{ name: file.name, visible: true, solo: false, x: 0, y: 0,
         bitmap: bytes.slice(0, 6144), attrs: bytes.slice(6144), mask: new Uint8Array(6144).fill(0xff) }];
+      references = []; selectedReference = -1; renderReferences(); renderReferenceList();
       activeLayer = 0; backgroundCode = -1; zxPreview = true;
       zxPreviewControl.classList.add('active'); zxPreviewControl.setAttribute('aria-pressed', 'true');
       bindActive(); updateBackgroundSwatches();
@@ -1843,8 +2116,12 @@
       const file = event.target.files[0]; if (!file) return;
       try {
         const project = parseProject(await file.text());
+        await Promise.all(project.references.map(async reference => {
+          reference.image = await decodeReference(reference.dataUrl);
+        }));
         stopLineSession(); stopRectangleSession(); cancelText();
-        layers = project.layers; activeLayer = project.activeLayer; backgroundCode = project.background;
+        layers = project.layers; references = project.references; selectedReference = -1;
+        activeLayer = project.activeLayer; backgroundCode = project.background;
         zxPreview = project.zxPreview;
         zxPreviewControl.classList.toggle('active', zxPreview);
         zxPreviewControl.setAttribute('aria-pressed', String(zxPreview));
@@ -1852,7 +2129,8 @@
         bindActive(); updateBackgroundSwatches();
         projectFileName = file.name; exportFileName = fileStem(file.name) + '.scr';
         undo.length = 0; redo.length = 0; selection = null; pendingMove = null;
-        renderLayerList(); render(); note(tr('Opened project {name}', { name: file.name }));
+        renderLayerList(); renderReferenceList(); renderReferences(); render();
+        note(tr('Opened project {name}', { name: file.name }));
       } catch (error) { note(tr('Could not open project: {message}', { message: error.message })); }
       event.target.value = '';
     };
@@ -1915,6 +2193,9 @@
       if (event.key === 'Escape') {
         if (lineSession) { event.preventDefault(); stopLineSession(); return; }
         if (rectangleSession) { event.preventDefault(); stopRectangleSession(); return; }
+        if (selectedReference >= 0) {
+          event.preventDefault(); selectedReference = -1; renderReferenceList(); return;
+        }
         if (typing) event.target.blur();
         if (selection) remember();
         finishPendingMove();
