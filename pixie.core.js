@@ -645,28 +645,63 @@ window.PIXIE_DRAW = (() => {
   const { layerAttr, layerBit, layerOpaque } = window.PIXIE_LAYER;
   const { rectangle, cellPoint, walkLine, ellipseOutline, connectedArea } = window.PIXIE_GEOMETRY;
   function create({ getState, setBit, setAttr, paintAttrCell, drawingAttr, remember }) {
-    function paintBrush(x, y, on) {
-      const { strokeWidth, inkTransparent, paperTransparent } = getState();
+    function paintPixel(x, y, on) {
+      const { inkTransparent, paperTransparent } = getState();
+      if (on && !inkTransparent) {
+        setBit(x, y, true, true);
+        paintAttrCell(x, y, !paperTransparent);
+      } else setBit(x, y, false, on ? false : !paperTransparent);
+    }
+    function paintSquare(x, y, on) {
+      const { strokeWidth } = getState();
       const offset = Math.floor((strokeWidth - 1) / 2);
-      for (let by = y - offset; by < y - offset + strokeWidth; by++) {
-        for (let bx = x - offset; bx < x - offset + strokeWidth; bx++) {
-          if (on && !inkTransparent) {
-            setBit(bx, by, true, true);
-            paintAttrCell(bx, by, !paperTransparent);
-          } else setBit(bx, by, false, on ? false : !paperTransparent);
+      for (let dy = 0; dy < strokeWidth; dy++)
+        for (let dx = 0; dx < strokeWidth; dx++)
+          paintPixel(x - offset + dx, y - offset + dy, on);
+    }
+    function paintBrush(x, y, on, forcedShape = null) {
+      const { strokeWidth, brushShape } = getState();
+      const shape = forcedShape || brushShape;
+      if (shape === 'square') { paintSquare(x, y, on); return; }
+      const offset = Math.floor((strokeWidth - 1) / 2);
+      const center = (strokeWidth - 1) / 2;
+      const radiusSquared = (strokeWidth / 2) ** 2;
+      if (shape === 'spray') {
+        const dots = Math.max(1, Math.round(strokeWidth / 8));
+        for (let i = 0; i < dots; i++) {
+          let dx, dy;
+          do {
+            dx = Math.floor(Math.random() * strokeWidth);
+            dy = Math.floor(Math.random() * strokeWidth);
+          } while ((dx - center) ** 2 + (dy - center) ** 2 > radiusSquared);
+          paintPixel(x - offset + dx, y - offset + dy, on);
+        }
+        return;
+      }
+      for (let dy = 0; dy < strokeWidth; dy++) {
+        for (let dx = 0; dx < strokeWidth; dx++) {
+          const distance = (dx - center) ** 2 + (dy - center) ** 2;
+          if (distance > radiusSquared) continue;
+          paintPixel(x - offset + dx, y - offset + dy, on);
         }
       }
     }
-    function line(a, b, on) {
+    function brushLine(a, b, on) {
       walkLine(a, b, (x, y) => paintBrush(x, y, on));
+    }
+    function line(a, b, on, shape = 'square') {
+      walkLine(a, b, (x, y) => paintBrush(x, y, on, shape));
     }
     function paintShape(action, start, end, on) {
       if (action === 'line') { line(start, end, on); return; }
-      if (action === 'ellipse') { ellipseOutline(start, end, (a, b) => line(a, b, on)); return; }
+      if (action === 'ellipse') { ellipseOutline(start, end, (a, b) => line(a, b, on, 'circle')); return; }
       const rect = rectangle(start, end);
       if (action === 'fill-rect') {
-        for (let y = rect.y; y < rect.y + rect.h; y++) {
-          for (let x = rect.x; x < rect.x + rect.w; x++) paintBrush(x, y, on);
+        const { strokeWidth } = getState();
+        const offset = Math.floor((strokeWidth - 1) / 2);
+        for (let y = rect.y - offset; y < rect.y + rect.h + strokeWidth - offset - 1; y++) {
+          for (let x = rect.x - offset; x < rect.x + rect.w + strokeWidth - offset - 1; x++)
+            paintPixel(x, y, on);
         }
       } else {
         const left = rect.x, right = rect.x + rect.w - 1;
@@ -736,7 +771,7 @@ window.PIXIE_DRAW = (() => {
         }
       }
     }
-    return { paintBrush, line, cellLine, paintShape, paintAttributeShape, fillArea };
+    return { paintBrush, brushLine, line, cellLine, paintShape, paintAttributeShape, fillArea };
   }
   return { create };
 })();

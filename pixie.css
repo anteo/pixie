@@ -156,9 +156,14 @@
   .workspace { --panel-default-width: 236px; --panel-width: var(--panel-default-width); flex: 1; min-height: 0; display: grid; grid-template-columns: var(--tool-rail-width) minmax(0, 1fr) 6px var(--panel-width); }
   .tool-rail { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 10px 6px; border-right: 1px solid #444; }
   .rail-gap { height: 10px; flex: none; }
-  .stroke-presets { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; }
-  .stroke-presets .stroke-size { width: 100%; height: 34px; }
-  .stroke-square { display: block; width: var(--square-size); height: var(--square-size); background: currentColor; }
+  #brush-kind-settings, #brush-size-settings { display: grid; gap: 6px; }
+  #brush-kind-settings[hidden] { display: none; }
+  .brush-shapes { display: flex; gap: 5px; }
+  .brush-shapes .icon-button { flex: 1; width: 0; height: 34px; }
+  .brush-shapes .icon { fill: currentColor; stroke: none; }
+  .brush-size-slider { display: flex; align-items: center; gap: 8px; }
+  #brush-size { flex: 1; min-width: 0; margin: 0; accent-color: #a6a6ff; }
+  #brush-size-value { min-width: 5ch; text-align: right; font: 11px ui-monospace, monospace; }
   .canvas-area { position: relative; min-width: 0; min-height: 0; }
   #panel-resizer { position: relative; cursor: col-resize; touch-action: none; }
   #panel-resizer::before { content: ''; position: absolute; inset: 0 auto 0 2px; width: 1px; background: #444; }
@@ -227,7 +232,7 @@
   .reference-opacity output { width: 4ch; text-align: right; font: 11px ui-monospace, monospace; }
   #trace-settings { flex: none; margin-top: 4px; }
   #trace-settings[hidden] { display: none; }
-  #stroke-settings { display: grid; flex: none; gap: 8px; margin-top: 4px; }
+  #stroke-settings { display: grid; flex: none; gap: 16px; margin-top: 4px; }
   #stroke-settings[hidden] { display: none; }
   #text-settings { display: grid; flex: none; gap: 8px; margin-top: 4px; }
   #text-settings[hidden], #text-local-fonts[hidden], #text-bold-row[hidden], #text-italic-row[hidden] { display: none; }
@@ -316,10 +321,6 @@
   }
   #status { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   #document-info { display: flex; flex: none; align-items: center; gap: 16px; white-space: nowrap; font: 12px ui-monospace, monospace; }
-  #stroke-current { display: inline-flex; align-items: center; gap: 6px; }
-  .stroke-indicator-slot { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 20px; height: 20px; border: 1px solid #8b909a; }
-  .stroke-indicator-slot.transparent { background: conic-gradient(#777 25%, #ddd 0 50%, #777 0 75%, #ddd 0) 0 0 / 100% 100%; }
-  #stroke-indicator.transparent { background: conic-gradient(#777 25%, #ddd 0 50%, #777 0 75%, #ddd 0) 0 0 / 100% 100%; }
   #cursor-info { display: flex; flex: none; align-items: center; gap: 7px; white-space: nowrap; }
   #cursor-coords { display: inline-block; flex: none; width: 17ch; margin-right: 8px; font: 12px ui-monospace, monospace; }
   .cursor-swatch { display: inline-block; width: 15px; height: 15px; border: 1px solid #888; border-radius: 2px; box-shadow: 0 0 0 1px #111; }

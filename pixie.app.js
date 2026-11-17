@@ -48,14 +48,12 @@
     const cursorCoords = document.querySelector('#cursor-coords');
     const cursorInfo = document.querySelector('#cursor-info');
     const cursorInk = document.querySelector('#cursor-ink'), cursorPaper = document.querySelector('#cursor-paper');
-    const strokeIndicator = document.querySelector('#stroke-indicator');
-    const strokeIndicatorSlot = document.querySelector('#stroke-indicator-slot');
     let cursorPoint = null, displayedScr = null, displayedCoverage = null, displayedSoloLayers = [];
     let ink = 7, paper = 0, inkTransparent = false, paperTransparent = true;
     let brightEnabled = true, gridEnabled = false, zxPreview = true, backgroundCode = 0;
     const backgroundSwatches = document.querySelector('#background-swatches');
     const { updateBackgroundSwatches, updateSwatches } = window.PIXIE_PALETTE.bind({
-      backgroundSwatches, inkSwatches, paperSwatches, referenceLayer, strokeIndicator, strokeIndicatorSlot,
+      backgroundSwatches, inkSwatches, paperSwatches, referenceLayer,
       normal, bright, colors, tr,
       getState: () => ({ ink, paper, inkTransparent, paperTransparent, brightEnabled, backgroundCode }),
       chooseColor: (kind, index) => chooseColor(kind, index),
@@ -82,42 +80,38 @@
       attrMode = !attrMode;
       attrModeButton.classList.toggle('active', attrMode);
       attrModeButton.setAttribute('aria-pressed', String(attrMode));
+      updateBrushSettingsVisibility();
       refreshPolyline(); refreshRectangle();
       note(tr(attrMode ? 'Drawing 8×8 cell attributes.' : 'Drawing pixels.'));
     };
-    const strokeSizes = [1, 2, 3, 4, 5, 6, 7, 8];
     const strokeSettingsPanel = document.querySelector('#stroke-settings');
-    const strokePresets = document.querySelector('#stroke-presets');
-    const strokeCurrent = document.querySelector('#stroke-current');
-    const strokeDimensions = document.querySelector('#stroke-dimensions');
-    let strokeWidth = 1;
+    const brushKindSettings = document.querySelector('#brush-kind-settings');
+    const brushShapes = document.querySelector('#brush-shapes');
+    const brushSize = document.querySelector('#brush-size');
+    const brushSizeValue = document.querySelector('#brush-size-value');
+    let strokeWidth = 1, brushShape = 'square';
     function setStrokeWidth(width) {
-      strokeWidth = width;
-      strokeDimensions.textContent = `${width}×${width} px`;
-      strokeIndicator.style.setProperty('--square-size', `${width * 2 + 2}px`);
-      strokeCurrent.title = tr('Brush size: {width}×{width} pixels', { width });
-      for (const button of strokePresets.children) {
-        const selected = Number(button.dataset.size) === width;
-        button.classList.toggle('active', selected);
-        button.setAttribute('aria-pressed', String(selected));
-      }
+      strokeWidth = Math.max(1, Math.min(64, Math.round(width)));
+      brushSize.value = String(strokeWidth);
+      brushSizeValue.textContent = `${strokeWidth} px`;
       refreshPolyline(); refreshRectangle();
     }
-    strokeSizes.forEach((size, index) => {
-      const button = document.createElement('button');
-      button.type = 'button'; button.className = 'icon-button stroke-size';
-      button.dataset.size = String(size);
-      const unit = tr(size === 1 ? 'pixel' : 'pixels', { count: size });
-      button.title = tr('Brush size {size} {unit} (Alt+Shift+{key})', { size, unit, key: index + 1 });
-      button.setAttribute('aria-label', tr('Brush size: {size} {unit}', { size, unit }));
-      button.style.setProperty('--square-size', `${size * 2 + 2}px`);
-      button.innerHTML = '<span class="stroke-square" aria-hidden="true"></span>';
-      button.onclick = () => setStrokeWidth(size);
-      strokePresets.appendChild(button);
-    });
+    brushSize.addEventListener('input', () => setStrokeWidth(Number(brushSize.value)));
+    for (const button of brushShapes.children) button.onclick = () => {
+      brushShape = button.dataset.brush;
+      for (const option of brushShapes.children) {
+        const selected = option === button;
+        option.classList.toggle('active', selected);
+        option.setAttribute('aria-pressed', String(selected));
+      }
+    };
     setStrokeWidth(1);
     const drawingTools = new Set(['draw', 'line', 'rect', 'fill-rect', 'ellipse', 'fill']);
     const sizedDrawingTools = new Set(['draw', 'line', 'rect', 'fill-rect', 'ellipse']);
+    function updateBrushSettingsVisibility() {
+      strokeSettingsPanel.hidden = attrMode || !sizedDrawingTools.has(tool);
+      brushKindSettings.hidden = attrMode || tool !== 'draw';
+    }
     const undo = [], redo = [];
     const note = message => { status.textContent = message; status.title = message; };
     const inside = (x, y) => x >= 0 && x < W && y >= 0 && y < H;
@@ -814,7 +808,7 @@
       if (name !== 'select' && tracePreview) cancelTrace(false);
       tool = name;
       textSettingsPanel.hidden = name !== 'text';
-      strokeSettingsPanel.hidden = !sizedDrawingTools.has(name);
+      updateBrushSettingsVisibility();
       document.querySelectorAll('[data-tool]').forEach(b => b.classList.toggle('active', b.dataset.tool === name));
       updateCanvasCursor();
       const tips = {
@@ -946,9 +940,9 @@
       if (drag?.action === 'resize' && drag.raw && drag.pointer)
         previewSelectionResize(drag.raw, shiftHeld, drag.pointer.x, drag.pointer.y);
     }
-    const { paintBrush, line, cellLine, paintShape, paintAttributeShape, fillArea } = window.PIXIE_DRAW.create({
+    const { paintBrush, brushLine, line, cellLine, paintShape, paintAttributeShape, fillArea } = window.PIXIE_DRAW.create({
       getState: () => ({ layer: active(), width: W, height: H, attrMode,
-        strokeWidth, inkTransparent, paperTransparent }),
+        strokeWidth, brushShape, inkTransparent, paperTransparent }),
       setBit, setAttr, paintAttrCell, drawingAttr, remember,
     });
     const shapeMeasure = document.querySelector('#shape-measure');
@@ -1084,6 +1078,7 @@
       }
       if (!drag) return false;
       const current = drag;
+      if (current.sprayTimer) clearInterval(current.sprayTimer);
       drag = null;
       if (screen.hasPointerCapture(current.pointerId)) screen.releasePointerCapture(current.pointerId);
       hideShapeMeasure();
@@ -1285,7 +1280,14 @@
       updateCanvasCursor(p);
       if (tool === 'draw') {
         if (drag.attrMode) paintAttrCell(p.x, p.y);
-        else paintBrush(p.x, p.y, drag.on);
+        else {
+          paintBrush(p.x, p.y, drag.on);
+          if (brushShape === 'spray') drag.sprayTimer = setInterval(() => {
+            if (!drag || drag.action !== 'draw') return;
+            paintBrush(drag.last.x, drag.last.y, drag.on);
+            render();
+          }, 80);
+        }
       }
       render();
       if (drag.action === 'select') previewSelection(p, event.shiftKey || shiftHeld, event.clientX, event.clientY);
@@ -1307,7 +1309,7 @@
       const raw = point(event), p = { x: clamp(raw.x, W - 1), y: clamp(raw.y, H - 1) };
       if (drag.action === 'draw') {
         if (drag.attrMode) cellLine(cellPoint(drag.last), cellPoint(p));
-        else line(drag.last, p, drag.on);
+        else brushLine(drag.last, p, drag.on);
       }
       if (drag.action === 'move-layer') {
         moveDraggedLayer(p, event.shiftKey || shiftHeld);
@@ -1345,10 +1347,11 @@
         return;
       }
       if (!drag) return;
+      if (drag.sprayTimer) clearInterval(drag.sprayTimer);
       if (drag.action === 'draw') {
         const raw = point(event), p = { x: clamp(raw.x, W - 1), y: clamp(raw.y, H - 1) };
         if (drag.attrMode) cellLine(cellPoint(drag.last), cellPoint(p));
-        else line(drag.last, p, drag.on);
+        else brushLine(drag.last, p, drag.on);
       }
       if (drag.action === 'move-layer') {
         const raw = point(event), p = { x: clamp(raw.x, W - 1), y: clamp(raw.y, H - 1) };
@@ -1399,6 +1402,7 @@
         shapePress = null;
       }
       if (drag?.action === 'select') selection = drag.finalizedPending ? null : drag.previousSelection;
+      if (drag?.sprayTimer) clearInterval(drag.sprayTimer);
       hideShapeMeasure(); drag = null; render(); updateCanvasCursor();
     });
     document.querySelectorAll('[data-tool]').forEach(b => b.onclick = () => setTool(b.dataset.tool));
@@ -1727,7 +1731,10 @@
         if (drag?.action === 'move-layer') { moveDraggedLayer(drag.last, false); render(); }
       }
     }, true);
-    window.addEventListener('blur', () => { shiftHeld = false; hideShapeMeasure(); });
+    window.addEventListener('blur', () => {
+      shiftHeld = false; hideShapeMeasure();
+      if (drag?.sprayTimer) { clearInterval(drag.sprayTimer); drag.sprayTimer = null; }
+    });
     document.addEventListener('keydown', event => {
       if (document.querySelector('#name-dialog').open || document.querySelector('#new-dialog').open) return;
       const typing = event.target instanceof Element && !!event.target.closest('input, textarea, select, [contenteditable="true"]');
@@ -1738,8 +1745,8 @@
         }
         const digit = /^Digit([0-9])$/.exec(event.code);
         const shifted = event.shiftKey || shiftHeld;
-        if (digit && shifted && Number(digit[1]) >= 1 && Number(digit[1]) <= strokeSizes.length) {
-          event.preventDefault(); setStrokeWidth(strokeSizes[Number(digit[1]) - 1]); return;
+        if (digit && shifted && Number(digit[1]) >= 1 && Number(digit[1]) <= 8) {
+          event.preventDefault(); setStrokeWidth(Number(digit[1])); return;
         }
         if (digit && !shifted) {
           event.preventDefault(); if (digit[1] === '0') fitZoom(); else zoomAtCenter(Number(digit[1])); return;

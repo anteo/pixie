@@ -23,7 +23,7 @@ Click a preview to open it at full size.
 
 ## What you can do
 
-- **Pixel brush.** Draw or erase depending on the first pixel touched; a drag continues that action.
+- **Pixel brush.** Choose a square, round, or spray tip and set its size from 1 to 64 pixels. Draw or erase depending on the first pixel touched; a drag continues that action.
 - **Text.** Rasterize the ZX ROM font or browser fonts into pixels, then move or resize the text before applying it.
 - **ZX attribute preview.** See the combined layers with ZX color limits. Attributes within each layer remain tied to 8×8 cells; the switch affects the composite preview and PNG export.
 - **Layers.** Move, reorder, merge, and manage visibility independently. Artwork can extend beyond the document while editing.
@@ -69,7 +69,7 @@ The ZX Spectrum can store only one INK/PAPER color pair and one BRIGHT setting p
 | `Shift+drag` with Move Layer | Snap the layer offset to 8×8 cell boundaries |
 | `Enter` | Apply a floating selection and dismiss its outline |
 | `Alt+1`…`Alt+9`, `Alt+0` | Set zoom; fit the canvas |
-| `Alt+Shift+1`…`Alt+Shift+8` | Choose a 1–8 pixel brush size |
+| `Alt+Shift+1`…`Alt+Shift+8` | Set a 1–8 pixel brush size; larger sizes use the slider |
 | `L`, `Shift+L`, `Shift+M` | Add layer, delete layer, merge with layer below |
 | `Cmd/Ctrl+O`, `Cmd/Ctrl+S` | Open or save a Pixie project |
 | `Cmd/Ctrl+Shift+O`, `Cmd/Ctrl+Shift+S` | Import or export SCR |

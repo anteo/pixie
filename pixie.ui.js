@@ -43,7 +43,11 @@ window.PIXIE_I18N = (() => {
       '#paste': ['Paste (⌘V)', 'Paste'],
       '#undo': ['Undo (⌘Z)', 'Undo'],
       '#redo': ['Redo (⌘⇧Z)', 'Redo'],
-      '#stroke-presets': [null, 'Brush size'],
+      '#brush-shapes': [null, 'Brush shape'],
+      '[data-brush="square"]': ['Square brush', 'Square brush'],
+      '[data-brush="circle"]': ['Round brush', 'Round brush'],
+      '[data-brush="spray"]': ['Spray brush', 'Spray brush'],
+      '#brush-size': [null, 'Brush size'],
       '#ink-swatches': [null, 'INK color'],
       '#paper-swatches': [null, 'PAPER color'],
       '#swap': ['Swap INK and PAPER (I)', 'Swap INK and PAPER'],
@@ -78,7 +82,6 @@ window.PIXIE_I18N = (() => {
       '#trace-apply': ['Apply tracing (Enter)', 'Apply'],
       '#trace-cancel': ['Cancel tracing (Escape)', 'Cancel'],
       '#reference-frame': [null, 'Selected reference image'],
-      '#stroke-current': ['Brush size: 1×1 pixels', 'Brush size'],
       '#cursor-info': ['INK and PAPER after SCR encoding', 'SCR attributes under cursor'],
       '#new-width': [null, 'Width in pixels'], '#new-height': [null, 'Height in pixels'],
       '#name-input': [null, 'Name'],
@@ -651,7 +654,7 @@ window.PIXIE_REFERENCES = (() => {
 
 window.PIXIE_PALETTE = (() => {
   function bind({ backgroundSwatches, inkSwatches, paperSwatches, referenceLayer,
-    strokeIndicator, strokeIndicatorSlot, normal, bright, colors, tr,
+    normal, bright, colors, tr,
     getState, chooseColor, chooseBackground }) {
     function updateBackgroundSwatches() {
       const { backgroundCode, brightEnabled } = getState();
@@ -680,11 +683,6 @@ window.PIXIE_PALETTE = (() => {
           button.setAttribute('aria-pressed', String(selected));
         }
       }
-      strokeIndicator.classList.toggle('transparent', inkTransparent);
-      strokeIndicator.style.backgroundColor = inkTransparent ? '' : (brightEnabled ? bright : normal)[ink];
-      strokeIndicatorSlot.classList.toggle('transparent', paperTransparent);
-      strokeIndicatorSlot.style.backgroundColor = paperTransparent ? '' : (brightEnabled ? bright : normal)[paper];
-      strokeIndicatorSlot.style.borderColor = paperTransparent ? '' : (brightEnabled ? bright : normal)[paper];
     }
     for (let i = 0; i < 9; i++) {
       const button = document.createElement('button');
