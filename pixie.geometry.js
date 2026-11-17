@@ -58,6 +58,23 @@ window.PIXIE_GEOMETRY = (() => {
     return direction > 0 ? (Math.floor(value / 8) + 1) * 8 : (Math.ceil(value / 8) - 1) * 8;
   }
 
+  function connectedArea(width, height, startX, startY, matches) {
+    const seen = new Uint8Array(width * height), queue = new Int32Array(width * height);
+    let head = 0, tail = 0;
+    queue[tail++] = startY * width + startX;
+    seen[startY * width + startX] = 1;
+    while (head < tail) {
+      const cell = queue[head++], x = cell % width, y = Math.floor(cell / width);
+      for (const next of [x > 0 ? cell - 1 : -1, x + 1 < width ? cell + 1 : -1,
+        y > 0 ? cell - width : -1, y + 1 < height ? cell + width : -1]) {
+        if (next < 0 || seen[next]) continue;
+        if (!matches(next % width, Math.floor(next / width))) continue;
+        seen[next] = 1; queue[tail++] = next;
+      }
+    }
+    return queue.subarray(0, tail);
+  }
+
   function walkLine(a, b, visit) {
     let x = a.x, y = a.y;
     const dx = Math.abs(b.x - x), dy = -Math.abs(b.y - y);
@@ -124,5 +141,5 @@ window.PIXIE_GEOMETRY = (() => {
   }
 
   return { rectangle, cellPoint, selectionRectangle, contains, sameSelection, scaleSelection,
-    resizedSelection, nudgeCoordinate, walkLine, ellipseOutline, lineEnd, ellipseEndpoint };
+    resizedSelection, nudgeCoordinate, connectedArea, walkLine, ellipseOutline, lineEnd, ellipseEndpoint };
 })();

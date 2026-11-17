@@ -994,7 +994,7 @@
       return { x: Math.floor((event.clientX - r.left) * W / r.width), y: Math.floor((event.clientY - r.top) * H / r.height) };
     };
     const clamp = (value, max) => Math.max(0, Math.min(max, value));
-    const { rectangle, cellPoint, walkLine, ellipseOutline, contains, sameSelection,
+    const { rectangle, cellPoint, connectedArea, walkLine, ellipseOutline, contains, sameSelection,
       scaleSelection, nudgeCoordinate } = window.PIXIE_GEOMETRY;
     function selectionRectangle(a, b, snap) {
       return window.PIXIE_GEOMETRY.selectionRectangle(a, b, snap, W, H);
@@ -1160,25 +1160,13 @@
         const left = Math.floor(-layer.x / 8), top = Math.floor(-layer.y / 8);
         const columns = Math.floor((W - 1 - layer.x) / 8) - left + 1;
         const rows = Math.floor((H - 1 - layer.y) / 8) - top + 1;
-        const seen = new Uint8Array(columns * rows), queue = new Int32Array(columns * rows);
         const startX = Math.floor(sx / 8) - left, startY = Math.floor(sy / 8) - top;
         const source = layerAttr(layer, sx, sy);
-        let head = 0, tail = 0;
-        queue[tail++] = startY * columns + startX;
-        seen[startY * columns + startX] = 1;
-        while (head < tail) {
-          const cell = queue[head++], x = cell % columns, y = Math.floor(cell / columns);
-          for (const next of [x > 0 ? cell - 1 : -1, x + 1 < columns ? cell + 1 : -1,
-            y > 0 ? cell - columns : -1, y + 1 < rows ? cell + columns : -1]) {
-            if (next < 0 || seen[next]) continue;
-            const nx = left + next % columns, ny = top + Math.floor(next / columns);
-            if (layerAttr(layer, nx * 8, ny * 8) !== source) continue;
-            seen[next] = 1; queue[tail++] = next;
-          }
-        }
+        const queue = connectedArea(columns, rows, startX, startY,
+          (x, y) => layerAttr(layer, (left + x) * 8, (top + y) * 8) === source);
         remember(previousSelection);
-        for (let i = 0; i < tail; i++) {
-          const cell = queue[i], x = cell % columns, y = Math.floor(cell / columns);
+        for (const cell of queue) {
+          const x = cell % columns, y = Math.floor(cell / columns);
           paintAttrCell(layer.x + (left + x) * 8, layer.y + (top + y) * 8);
         }
         return;
@@ -1191,23 +1179,10 @@
         return color && value & 64 ? color + 8 : color;
       };
       const source = keyAt(point.x, point.y);
-      const seen = new Uint8Array(W * H), queue = new Int32Array(W * H);
-      let head = 0, tail = 0;
-      queue[tail++] = point.y * W + point.x;
-      seen[point.y * W + point.x] = 1;
-      while (head < tail) {
-        const cell = queue[head++], x = cell % W, y = Math.floor(cell / W);
-        for (const next of [x > 0 ? cell - 1 : -1, x + 1 < W ? cell + 1 : -1,
-          y > 0 ? cell - W : -1, y + 1 < H ? cell + W : -1]) {
-          if (next < 0 || seen[next]) continue;
-          const nx = next % W, ny = Math.floor(next / W);
-          if (keyAt(nx, ny) !== source) continue;
-          seen[next] = 1; queue[tail++] = next;
-        }
-      }
+      const queue = connectedArea(W, H, point.x, point.y, (x, y) => keyAt(x, y) === source);
       remember(previousSelection);
-      for (let i = 0; i < tail; i++) {
-        const cell = queue[i], x = cell % W, y = Math.floor(cell / W);
+      for (const cell of queue) {
+        const x = cell % W, y = Math.floor(cell / W);
         if (forceErase || inkTransparent) setBit(x, y, false, forceErase && !paperTransparent);
         else {
           const attribute = drawingAttr(x, y);
