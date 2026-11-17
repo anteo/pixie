@@ -1532,17 +1532,14 @@
       return { x: Math.floor((event.clientX - r.left) * W / r.width), y: Math.floor((event.clientY - r.top) * H / r.height) };
     };
     const clamp = (value, max) => Math.max(0, Math.min(max, value));
-    const { rectangle, cellPoint, walkLine, ellipseOutline } = window.PIXIE_GEOMETRY;
+    const { rectangle, cellPoint, walkLine, ellipseOutline, contains, sameSelection,
+      scaleSelection, nudgeCoordinate } = window.PIXIE_GEOMETRY;
     function selectionRectangle(a, b, snap) {
-      const rect = rectangle(a, b);
-      if (!snap) return rect;
-      const x = Math.floor(rect.x / 8) * 8, y = Math.floor(rect.y / 8) * 8;
-      return { x, y, w: Math.min(W, Math.ceil((rect.x + rect.w) / 8) * 8) - x,
-        h: Math.min(H, Math.ceil((rect.y + rect.h) / 8) * 8) - y };
+      return window.PIXIE_GEOMETRY.selectionRectangle(a, b, snap, W, H);
     }
-    const contains = (s, p) => !!s && !!p && p.x >= s.x && p.x < s.x + s.w && p.y >= s.y && p.y < s.y + s.h;
-    const sameSelection = (a, b) => a === b || !!a && !!b &&
-      a.x === b.x && a.y === b.y && a.w === b.w && a.h === b.h;
+    function resizedSelection(bounds, handle, dx, dy, snap) {
+      return window.PIXIE_GEOMETRY.resizedSelection(bounds, handle, dx, dy, snap, W, H);
+    }
     function capture(s) {
       const bits = new Uint8Array(s.w * s.h), colors = new Uint8Array(bits.length), opacity = new Uint8Array(bits.length);
       for (let y = 0; y < s.h; y++) for (let x = 0; x < s.w; x++) {
@@ -1552,38 +1549,6 @@
         opacity[i] = layerOpaque(active(), lx, ly) ? 1 : 0;
       }
       return { x: s.x, y: s.y, w: s.w, h: s.h, bits, colors, opacity };
-    }
-    function scaleSelection(data, width, height) {
-      const bits = new Uint8Array(width * height);
-      const colors = new Uint8Array(bits.length);
-      const opacity = new Uint8Array(bits.length);
-      for (let y = 0; y < height; y++) {
-        const sourceY = Math.min(data.h - 1, Math.floor(y * data.h / height));
-        for (let x = 0; x < width; x++) {
-          const sourceX = Math.min(data.w - 1, Math.floor(x * data.w / width));
-          const source = sourceY * data.w + sourceX, target = y * width + x;
-          bits[target] = data.bits[source];
-          colors[target] = data.colors[source];
-          opacity[target] = data.opacity[source];
-        }
-      }
-      return { ...data, w: width, h: height, bits, colors, opacity };
-    }
-    function resizedSelection(bounds, handle, dx, dy, snap) {
-      const extent = (size, maximum) => {
-        if (!snap || maximum < 8) return Math.max(1, Math.min(maximum, size));
-        return Math.max(8, Math.min(Math.floor(maximum / 8) * 8, Math.round(size / 8) * 8));
-      };
-      let { x, y, w, h } = bounds;
-      if (dx && handle.includes('w')) {
-        w = extent(bounds.w - dx, bounds.x + bounds.w);
-        x = bounds.x + bounds.w - w;
-      } else if (dx && handle.includes('e')) w = extent(bounds.w + dx, W - bounds.x);
-      if (dy && handle.includes('n')) {
-        h = extent(bounds.h - dy, bounds.y + bounds.h);
-        y = bounds.y + bounds.h - h;
-      } else if (dy && handle.includes('s')) h = extent(bounds.h + dy, H - bounds.y);
-      return { x, y, w, h };
     }
     function clear(s) {
       for (let y = s.y; y < s.y + s.h; y++) for (let x = s.x; x < s.x + s.w; x++) setBit(x, y, false, false);
@@ -1646,11 +1611,6 @@
       return { x: clamp(drag.source.x + p.x - drag.start.x, W - 1),
         y: clamp(drag.source.y + p.y - drag.start.y, H - 1),
         w: drag.source.w, h: drag.source.h };
-    }
-    function nudgeCoordinate(value, direction, snap) {
-      if (!direction) return value;
-      if (!snap) return value + direction;
-      return direction > 0 ? (Math.floor(value / 8) + 1) * 8 : (Math.ceil(value / 8) - 1) * 8;
     }
     function nudgeSelection(dx, dy) {
       if (!selection) return;

@@ -5,6 +5,59 @@ window.PIXIE_GEOMETRY = (() => {
   });
   const cellPoint = point => ({ x: point.x >> 3, y: point.y >> 3 });
 
+  function selectionRectangle(a, b, snap, width, height) {
+    const rect = rectangle(a, b);
+    if (!snap) return rect;
+    const x = Math.floor(rect.x / 8) * 8, y = Math.floor(rect.y / 8) * 8;
+    return { x, y, w: Math.min(width, Math.ceil((rect.x + rect.w) / 8) * 8) - x,
+      h: Math.min(height, Math.ceil((rect.y + rect.h) / 8) * 8) - y };
+  }
+  const contains = (selection, point) => !!selection && !!point &&
+    point.x >= selection.x && point.x < selection.x + selection.w &&
+    point.y >= selection.y && point.y < selection.y + selection.h;
+  const sameSelection = (a, b) => a === b || !!a && !!b &&
+    a.x === b.x && a.y === b.y && a.w === b.w && a.h === b.h;
+
+  function scaleSelection(data, width, height) {
+    const bits = new Uint8Array(width * height);
+    const colors = new Uint8Array(bits.length);
+    const opacity = new Uint8Array(bits.length);
+    for (let y = 0; y < height; y++) {
+      const sourceY = Math.min(data.h - 1, Math.floor(y * data.h / height));
+      for (let x = 0; x < width; x++) {
+        const sourceX = Math.min(data.w - 1, Math.floor(x * data.w / width));
+        const source = sourceY * data.w + sourceX, target = y * width + x;
+        bits[target] = data.bits[source];
+        colors[target] = data.colors[source];
+        opacity[target] = data.opacity[source];
+      }
+    }
+    return { ...data, w: width, h: height, bits, colors, opacity };
+  }
+
+  function resizedSelection(bounds, handle, dx, dy, snap, width, height) {
+    const extent = (size, maximum) => {
+      if (!snap || maximum < 8) return Math.max(1, Math.min(maximum, size));
+      return Math.max(8, Math.min(Math.floor(maximum / 8) * 8, Math.round(size / 8) * 8));
+    };
+    let { x, y, w, h } = bounds;
+    if (dx && handle.includes('w')) {
+      w = extent(bounds.w - dx, bounds.x + bounds.w);
+      x = bounds.x + bounds.w - w;
+    } else if (dx && handle.includes('e')) w = extent(bounds.w + dx, width - bounds.x);
+    if (dy && handle.includes('n')) {
+      h = extent(bounds.h - dy, bounds.y + bounds.h);
+      y = bounds.y + bounds.h - h;
+    } else if (dy && handle.includes('s')) h = extent(bounds.h + dy, height - bounds.y);
+    return { x, y, w, h };
+  }
+
+  function nudgeCoordinate(value, direction, snap) {
+    if (!direction) return value;
+    if (!snap) return value + direction;
+    return direction > 0 ? (Math.floor(value / 8) + 1) * 8 : (Math.ceil(value / 8) - 1) * 8;
+  }
+
   function walkLine(a, b, visit) {
     let x = a.x, y = a.y;
     const dx = Math.abs(b.x - x), dy = -Math.abs(b.y - y);
@@ -70,5 +123,6 @@ window.PIXIE_GEOMETRY = (() => {
     return cellMode ? { x: end.x * 8, y: end.y * 8 } : end;
   }
 
-  return { rectangle, cellPoint, walkLine, ellipseOutline, lineEnd, ellipseEndpoint };
+  return { rectangle, cellPoint, selectionRectangle, contains, sameSelection, scaleSelection,
+    resizedSelection, nudgeCoordinate, walkLine, ellipseOutline, lineEnd, ellipseEndpoint };
 })();
