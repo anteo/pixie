@@ -1,4 +1,4 @@
-# <img src="docs/images/readme-icon.svg" alt="" width="48" height="48" align="middle"> Pixie — Редактор графики ZX Spectrum
+# <img src="docs/images/readme-icon.svg" alt="" width="48" height="48" align="absmiddle"> Pixie — Редактор графики ZX Spectrum
 
 [![English](https://img.shields.io/badge/lang-en-blue.svg)](README.md)
 [![Русский](https://img.shields.io/badge/lang-ru-green.svg)](README.ru.md)
