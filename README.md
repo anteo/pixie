@@ -1,6 +1,4 @@
-# <img src="docs/images/readme-icon.svg" alt="" width="48" height="48"> Pixie
-
-**A browser-based graphics editor for ZX Spectrum screens.**
+# <img src="docs/images/readme-icon.svg" alt="" width="48" height="48" align="middle"> Pixie — ZX Spectrum graphics editor
 
 [![English](https://img.shields.io/badge/lang-en-blue.svg)](README.md)
 [![Русский](https://img.shields.io/badge/lang-ru-green.svg)](README.ru.md)
