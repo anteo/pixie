@@ -30,7 +30,7 @@ Pixie lets you draw at individual pixel resolution while seeing how the result w
 - **Trace controls.** The trace button reveals controls for brightness, contrast, saturation, levels, simplification, noise, dithering, and neighboring cell color consistency in the right panel. Choose linear RGB Floyd–Steinberg, Sierra, Atkinson, Bayer 4×4/8×8, checker dithering, or no dithering. Controls update a floating trace immediately.
 - **Layers.** Show, hide, rename, move, reorder, merge, and delete layers from their rows. Layer content can extend beyond the document while you move and edit it; exports show only the document area. The visibility button cycles **on → off → solo** and shows the letter S in solo state; `V` cycles the active layer. Several layers can be solo at once.
 - **Solo preview.** With ZX preview on, all enabled layers are rendered together with ZX attributes; that result is dimmed outside the solo layers. Solo pixels remain at full brightness and follow layer order, while other rows in the layer panel become translucent. With ZX preview off, the dimmed area uses normal layer compositing. Solo is a canvas preview; exports retain the normal visible-layer image.
-- **Selections.** Copy, cut, erase, and move a selected region. Arrow keys nudge it by one pixel; Shift+arrow keys move it by one 8×8 cell. Pasted artwork stays floating until Enter or deselection applies it.
+- **Selections.** Copy, cut, erase, and move a selected region. Arrow keys nudge it by one pixel; Shift+arrow keys snap it to the next 8×8 cell boundary. Pasted artwork stays floating until Enter or deselection applies it.
 - **ZX attribute preview.** When rendering the visible layers together, encode their composition using ZX screen attributes. Each layer itself always keeps attributes per 8×8 cell; switching the preview does not change that. PNG export follows the preview, while SCR export always uses ZX encoding.
 - **Grid.** Show 8×8 cell boundaries and, at high zoom, individual pixel boundaries.
 - **Zoom and pan.** Pinch to zoom, scroll to pan, or use keyboard zoom presets from 1× to 9×.
@@ -57,7 +57,7 @@ The ZX Spectrum can store only one INK/PAPER color pair and one BRIGHT setting p
 | `B`, `D`, `R`, `F`, `E`, `P`, `S`, `M`, `T` | Brush, polyline, rectangle, filled rectangle, ellipse, fill, selection, move layer, text |
 | `A`, `Z`, `G` | Attribute painting, ZX preview, grid |
 | `K`, `Enter`, `Escape` | Start tracing the selected reference; apply or cancel the preview |
-| `Arrow keys`, `Shift+arrow keys` | Move a selection by 1 or 8 pixels; move the layer when the Move Layer tool is active |
+| `Arrow keys`, `Shift+arrow keys` | Move a selection by 1 pixel or to the next 8×8 cell boundary; move the layer when the Move Layer tool is active |
 | `Enter` | Apply a floating selection and dismiss its outline |
 | `Alt+1`…`Alt+9`, `Alt+0` | Set zoom; fit the canvas |
 | `L`, `Shift+L`, `Shift+M` | Add layer, delete layer, merge with layer below |

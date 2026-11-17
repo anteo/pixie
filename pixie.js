@@ -55,7 +55,7 @@
         '[data-tool="ellipse"]': ['Ellipse (E): two clicks or drag; Shift makes a circle; right button erases', 'Ellipse'],
         '[data-tool="fill"]': ['Fill connected area (P); right button erases', 'Fill'],
         '[data-tool="select"]': ['Select area (S); Shift snaps to 8×8 cells', 'Select'],
-        '[data-tool="move-layer"]': ['Move layer (M; arrows move 1 pixel, Shift+arrows move 8)', 'Move layer'],
+        '[data-tool="move-layer"]': ['Move layer (M; arrows move 1 pixel, Shift+arrows snap to the next 8×8 cell)', 'Move layer'],
         '#attr-mode': ['Draw 8×8 cell attributes (A)', 'Draw cell attributes'],
         '[data-tool="text"]': ['Text: click the canvas and type; Shift snaps to a cell (T)', 'Text'],
         '#text-entry': [null, 'Text on canvas'],
@@ -1473,7 +1473,7 @@
         'fill-rect': 'Draw a filled rectangle with two clicks or a drag.',
         ellipse: 'Draw an ellipse with two clicks or a drag; Shift makes a circle.',
         fill: 'Fill a connected area on the active layer.',
-        select: 'Select an area; Shift snaps to 8×8 cells. Arrows move the selection by 1 pixel, Shift+arrows by 8.',
+        select: 'Select an area; Shift snaps to 8×8 cells. Arrows move the selection by 1 pixel, Shift+arrows to the next cell boundary.',
         'move-layer': 'Drag the canvas to move the active layer.',
         text: 'Click the canvas and type. Enter commits; Escape cancels.',
       };
@@ -1566,6 +1566,11 @@
       return { x: clamp(drag.source.x + p.x - drag.start.x, W - 1),
         y: clamp(drag.source.y + p.y - drag.start.y, H - 1),
         w: drag.source.w, h: drag.source.h };
+    }
+    function nudgeCoordinate(value, direction, snap) {
+      if (!direction) return value;
+      if (!snap) return value + direction;
+      return direction > 0 ? (Math.floor(value / 8) + 1) * 8 : (Math.ceil(value / 8) - 1) * 8;
     }
     function nudgeSelection(dx, dy) {
       if (!selection) return;
@@ -2748,8 +2753,9 @@
       const directions = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
       if (directions[event.key] && selection && tool !== 'move-layer') {
         event.preventDefault();
-        const step = event.shiftKey ? 8 : 1;
-        nudgeSelection(directions[event.key][0] * step, directions[event.key][1] * step);
+        const [dx, dy] = directions[event.key];
+        nudgeSelection(nudgeCoordinate(selection.x, dx, event.shiftKey) - selection.x,
+          nudgeCoordinate(selection.y, dy, event.shiftKey) - selection.y);
         return;
       }
       if (selection && (event.key === 'Delete' || event.key === 'Backspace')) {
@@ -2758,9 +2764,9 @@
       }
       if (tool === 'move-layer' && directions[event.key]) {
         event.preventDefault(); remember();
-        const step = event.shiftKey ? 8 : 1;
-        active().x += directions[event.key][0] * step;
-        active().y += directions[event.key][1] * step;
+        const [dx, dy] = directions[event.key];
+        active().x = nudgeCoordinate(active().x, dx, event.shiftKey);
+        active().y = nudgeCoordinate(active().y, dy, event.shiftKey);
         renderLayerList(); render(); return;
       }
       const digit = /^Digit([1-8])$/.exec(event.code);
