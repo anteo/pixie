@@ -45,6 +45,7 @@ Click a preview to open it at full size.
 - **Brush size.** Choose a shared 1–8 pixel width in the right panel when a drawing tool is active.
 - **Grid.** Show 8×8 cell boundaries and, at high zoom, individual pixel boundaries.
 - **Zoom and pan.** Pinch to zoom, scroll to pan, or use keyboard zoom presets from 1× to 9×. When the canvas needs scrolling, a compact navigator appears at the bottom of the right panel. Its frame marks the visible area, and a click or drag jumps to another part of the image.
+- **Resizable side panel.** Drag the divider beside the canvas to change the right panel's width; double-click it to restore the default. The width is remembered between visits.
 - **Undo and redo.** Revert drawing, layer changes, and selections. During an unfinished drag or shape preview, Undo cancels that action first.
 - **Unsaved changes.** Creating a document, opening another project, or importing SCR asks whether to save when the current artwork has changed. A newly imported SCR counts as unsaved until the project is saved as `.pixie`.
 

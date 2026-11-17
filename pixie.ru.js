@@ -6,6 +6,8 @@ window.PIXIE_RU = Object.freeze({
   'References': 'Референсы',
   'Reference images': 'Референсные изображения',
   'Canvas navigator': 'Навигатор холста',
+  'Resize side panel': 'Изменить ширину правой панели',
+  'Drag to resize the side panel; double-click to reset': 'Перетащите, чтобы изменить ширину панели; двойной щелчок восстановит исходную',
   'Zoom presets': 'Масштаб',
   'Click or drag to pan the canvas': 'Щёлкните или перетащите рамку, чтобы переместиться по холсту',
   'Reference tracing (K)': 'Трассировка референса (K)',

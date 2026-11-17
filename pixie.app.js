@@ -1120,7 +1120,7 @@
     });
     const { previewText, commitText, cancelText, startText } = textUI;
     document.addEventListener('click', event => {
-      if (!textUI.session || event.target === textEntry || event.target.closest('#viewport, #text-settings')) return;
+      if (!textUI.session || event.target === textEntry || event.target.closest('#viewport, #text-settings, #panel-resizer')) return;
       if (document.querySelector('dialog[open]')) return;
       if (event.target.closest('#new, #open, #open-project, #save, #save-project, #save-png')) return;
       textEntry.focus({ preventScroll: true });
@@ -1134,7 +1134,7 @@
       if (selection) { remember(); finishPendingMove(); selection = null; render(); }
     });
     document.addEventListener('pointerdown', event => {
-      if (tracePreview || selectedReference < 0 || event.target.closest('#reference-frame, .reference-row, #screen, #reference-trace, #trace-settings, #navigator')) return;
+      if (tracePreview || selectedReference < 0 || event.target.closest('#reference-frame, .reference-row, #screen, #reference-trace, #trace-settings, #navigator, #panel-resizer')) return;
       selectedReference = -1;
       renderReferenceList();
     });
@@ -1511,6 +1511,8 @@
       setZxPreview(!zxPreview);
       note(tr(zxPreview ? 'ZX attribute preview on.' : 'ZX attribute preview off.'));
     };
+    window.PIXIE_VIEWPORT.bindPanelResizer(
+      document.querySelector('#panel-resizer'), document.querySelector('.workspace'));
     navigatorUi = window.PIXIE_VIEWPORT.bind({
       viewport, stage, getSize: () => ({ width: W, height: H }),
       getZoom: () => zoom, setZoom: value => { zoom = value; },

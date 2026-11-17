@@ -61,6 +61,7 @@ window.PIXIE_I18N = (() => {
       '#attr-mode': ['Draw 8×8 cell attributes (A)', 'Draw cell attributes'],
       '[data-tool="text"]': ['Text: click the canvas and type; Shift snaps to a cell (T)', 'Text'],
       '#text-entry': [null, 'Text on canvas'],
+      '#panel-resizer': ['Drag to resize the side panel; double-click to reset', 'Resize side panel'],
       '.zoom-presets': [null, 'Zoom presets'],
       '#navigator': ['Click or drag to pan the canvas', 'Canvas navigator'],
       '#zoom-1': ['Zoom 1× (Alt+1)'], '#zoom-2': ['Zoom 2× (Alt+2)'],
@@ -314,6 +315,71 @@ window.PIXIE_PANEL_ROWS = (() => {
 })();
 
 window.PIXIE_VIEWPORT = (() => {
+  function bindPanelResizer(resizer, workspace) {
+    const minWidth = 192, maxWidth = 560, minCanvasWidth = 200;
+    const storageKey = 'pixie.panelWidth';
+    let desiredWidth = null, drag = null;
+    try {
+      const stored = localStorage.getItem(storageKey);
+      if (stored !== null && Number.isFinite(Number(stored))) desiredWidth = Number(stored);
+    } catch { /* Local storage may be unavailable for file URLs. */ }
+    function widthLimit() {
+      const railWidth = workspace.firstElementChild.getBoundingClientRect().width;
+      return Math.max(minWidth, Math.min(maxWidth,
+        workspace.clientWidth - railWidth - resizer.offsetWidth - minCanvasWidth));
+    }
+    function applyWidth() {
+      const fallback = parseFloat(getComputedStyle(workspace).getPropertyValue('--panel-default-width'));
+      const maximum = widthLimit();
+      const width = Math.max(minWidth, Math.min(maximum, desiredWidth ?? fallback));
+      workspace.style.setProperty('--panel-width', `${width}px`);
+      resizer.setAttribute('aria-valuemin', String(minWidth));
+      resizer.setAttribute('aria-valuemax', String(maximum));
+      resizer.setAttribute('aria-valuenow', String(Math.round(width)));
+      return width;
+    }
+    function saveWidth() {
+      try {
+        if (desiredWidth === null) localStorage.removeItem(storageKey);
+        else localStorage.setItem(storageKey, String(Math.round(desiredWidth)));
+      } catch { /* Keep the resize available even without local storage. */ }
+    }
+    resizer.addEventListener('pointerdown', event => {
+      if (event.button !== 0) return;
+      event.preventDefault();
+      resizer.focus({ preventScroll: true });
+      drag = { pointerId: event.pointerId, x: event.clientX, width: applyWidth() };
+      resizer.setPointerCapture(event.pointerId);
+      resizer.classList.add('dragging');
+      document.body.classList.add('resizing-panel');
+    });
+    resizer.addEventListener('pointermove', event => {
+      if (drag?.pointerId !== event.pointerId) return;
+      desiredWidth = Math.max(minWidth, Math.min(widthLimit(), drag.width + drag.x - event.clientX));
+      applyWidth();
+    });
+    function finishDrag(event) {
+      if (drag?.pointerId !== event.pointerId) return;
+      drag = null;
+      resizer.classList.remove('dragging');
+      document.body.classList.remove('resizing-panel');
+      saveWidth();
+    }
+    resizer.addEventListener('pointerup', finishDrag);
+    resizer.addEventListener('pointercancel', finishDrag);
+    resizer.addEventListener('keydown', event => {
+      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+      event.preventDefault(); event.stopPropagation();
+      desiredWidth = applyWidth() + (event.key === 'ArrowLeft' ? 1 : -1) * (event.shiftKey ? 40 : 16);
+      applyWidth(); saveWidth();
+    });
+    resizer.addEventListener('dblclick', () => {
+      desiredWidth = null;
+      applyWidth(); saveWidth();
+    });
+    window.addEventListener('resize', applyWidth);
+    applyWidth();
+  }
   function bind({ viewport, stage, getSize, getZoom, setZoom,
     renderReferences, drawOverlay, drawTransparency, updateGrid,
     navigator, navigatorCanvas, navigatorWindow, screen, textCanvas, getNavigatorScene }) {
@@ -484,7 +550,7 @@ window.PIXIE_VIEWPORT = (() => {
     updateNavigatorFrame();
     return { zoomAt, zoomAtCenter, fitZoom, drawNavigator };
   }
-  return { bind };
+  return { bind, bindPanelResizer };
 })();
 
 window.PIXIE_REFERENCE_FRAME = (() => {
