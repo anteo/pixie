@@ -80,3 +80,17 @@ ZX Spectrum хранит только одну пару цветов INK/PAPER �
 | `Cmd/Ctrl+Shift+O`, `Cmd/Ctrl+Shift+S` | Импортировать или экспортировать SCR |
 
 Язык интерфейса выбирается по первому предпочитаемому языку браузера: русский для `ru`, английский для остальных.
+
+## Структура кода
+
+`pixie.app.js` хранит состояние документа и координирует действия редактора. Остальные обычные скрипты, подключённые в `index.html`, отвечают за отдельные части:
+
+- `pixie.layer.js`, `pixie.selection.js`, `pixie.geometry.js` — хранение битовой карты, плавающие пиксели и геометрия фигур.
+- `pixie.composite.js`, `pixie.display.js` — сборка атрибутов ZX, вывод на холст и экспорт PNG.
+- `pixie.trace.js`, `pixie.trace-controls.js` — преобразование референсов и настройки трассировки.
+- `pixie.text.js`, `pixie.text-ui.js` — растеризация шрифтов и ввод текста.
+- `pixie.project.js`, `pixie.files.js` — данные проекта и файловые диалоги.
+- `pixie.references.js`, `pixie.reference-frame.js`, `pixie.panel-rows.js`, `pixie.sortable.js`, `pixie.viewport.js` — размещение референсов и элементы интерфейса.
+- `pixie.i18n.js` использует переводы из `pixie.ru.js`.
+
+Скрипты подключены обычными тегами `defer` в порядке зависимостей. Поэтому локальный `index.html` по-прежнему можно открыть через `file://`.
